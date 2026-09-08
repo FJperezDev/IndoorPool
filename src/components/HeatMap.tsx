@@ -37,6 +37,7 @@ export const HeatMap = () => {
   const isDoorOpen = useSimulationStore((s) => s.isDoorOpen);
   const viewMode = useSimulationStore((s) => s.viewMode);
   const sweepsPerFrame = useSimulationStore((s) => s.sweepsPerFrame);
+  const running = useSimulationStore((s) => s.running);
 
   const canvas = useMemo(() => document.createElement("canvas"), []);
   const texture = useMemo(() => new THREE.CanvasTexture(canvas), [canvas]);
@@ -52,7 +53,7 @@ export const HeatMap = () => {
   }, [canvas, texture]);
 
   useFrame(() => {
-    stepSimulation(persons, isDoorOpen, sweepsPerFrame);
+    if (running) stepSimulation(persons, isDoorOpen, sweepsPerFrame);
 
     const ctx = canvas.getContext("2d");
     if (!ctx || !imgData.current) return;

@@ -1,5 +1,9 @@
 import { create } from "zustand";
-import { resetSolver } from "../math/subSuperSolver";
+import {
+  resetSolver,
+  gotoIteration,
+  solverState,
+} from "../math/subSuperSolver";
 
 export type ActionStatus = "entering" | "wandering" | "swimming" | "exiting";
 
@@ -25,6 +29,8 @@ interface SimState {
   viewMode: ViewMode;
   sweepsPerFrame: number;
   buildingTransparent: boolean;
+  running: boolean;
+  targetIteration: number;
   addPerson: () => void;
   removePerson: () => void;
   fillCapacity: () => void;
@@ -34,6 +40,10 @@ interface SimState {
   setSweepsPerFrame: (n: number) => void;
   setBuildingTransparent: (v: boolean) => void;
   setDoorMode: (m: DoorMode) => void;
+  setRunning: (v: boolean) => void;
+  setTargetIteration: (n: number) => void;
+  stepBy: (delta: number) => void;
+  refresh: () => void;
   resetSimulation: () => void;
 }
 
@@ -59,6 +69,8 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   viewMode: "solution",
   sweepsPerFrame: 12,
   buildingTransparent: true,
+  running: true,
+  targetIteration: 0,
 
   addPerson: () => {
     const { persons, maxCapacity } = get();
@@ -73,6 +85,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
       status: "entering",
     };
     set({ persons: [...persons, newPerson] });
+    get().refresh();
   },
 
   removePerson: () => {
@@ -86,6 +99,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
           : p,
       ),
     });
+    get().refresh();
   },
 
   fillCapacity: () => {
@@ -112,9 +126,13 @@ export const useSimulationStore = create<SimState>((set, get) => ({
       });
     }
     set({ persons: [...persons, ...newcomers] });
+    get().refresh();
   },
 
-  clearPersons: () => set({ persons: [], isDoorOpen: false }),
+  clearPersons: () => {
+    set({ persons: [], isDoorOpen: false });
+    get().refresh();
+  },
 
   updatePositions: () => {
     set((state) => {
@@ -169,10 +187,36 @@ export const useSimulationStore = create<SimState>((set, get) => ({
 
   setViewMode: (viewMode) => set({ viewMode }),
   setSweepsPerFrame: (sweepsPerFrame) => set({ sweepsPerFrame }),
-  setDoorMode: (doorMode) => set({ doorMode }),
+  setDoorMode: (doorMode) => {
+    set({ doorMode });
+    get().refresh();
+  },
+  setRunning: (running) => {
+    if (running) {
+      set({ running: true });
+    } else {
+      set({ running: false, targetIteration: solverState.iteration });
+    }
+  },
+  setTargetIteration: (n) => {
+    const next = Math.max(0, Math.floor(n));
+    const { persons, isDoorOpen } = get();
+    gotoIteration(persons, isDoorOpen, next);
+    set({ targetIteration: next });
+  },
+  stepBy: (delta) => {
+    const { targetIteration, persons, isDoorOpen } = get();
+    const next = Math.max(0, targetIteration + delta);
+    gotoIteration(persons, isDoorOpen, next);
+    set({ targetIteration: next });
+  },
+  refresh: () => {
+    const { running, persons, isDoorOpen, targetIteration } = get();
+    if (!running) gotoIteration(persons, isDoorOpen, targetIteration);
+  },
   resetSimulation: () => {
     resetSolver();
-    set({ persons: [], isDoorOpen: false });
+    set({ persons: [], isDoorOpen: false, targetIteration: 0 });
   },
   setBuildingTransparent: (buildingTransparent) => set({ buildingTransparent }),
 }));

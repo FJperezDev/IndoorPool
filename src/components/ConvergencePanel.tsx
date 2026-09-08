@@ -21,6 +21,7 @@ export const ConvergencePanel = () => {
   const maxCapacity = useSimulationStore((s) => s.maxCapacity);
   const isDoorOpen = useSimulationStore((s) => s.isDoorOpen);
   const viewMode = useSimulationStore((s) => s.viewMode);
+  const running = useSimulationStore((s) => s.running);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -169,6 +170,10 @@ export const ConvergencePanel = () => {
         <span>{toCelsius(telemetry.supSub).toFixed(1)} °C</span>
         <span style={{ opacity: 0.6 }}>Cot. superior</span>
         <span>{toCelsius(telemetry.infSuper).toFixed(1)} °C</span>
+        <span style={{ opacity: 0.6 }}>Estado</span>
+        <span style={{ color: running ? "#7ad48f" : "#ff8a6a" }}>
+          {running ? "reproduciendo" : "pausado (navegar)"}
+        </span>
       </div>
 
       <canvas

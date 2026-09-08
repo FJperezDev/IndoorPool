@@ -6,7 +6,7 @@ import {
   ViewMode,
   DoorMode,
 } from "./store/useSimulationStore";
-import { params, setParams } from "./math/subSuperSolver";
+import { params, setParams, solverState } from "./math/subSuperSolver";
 import { Scene } from "./components/Scene";
 import { ConvergencePanel } from "./components/ConvergencePanel";
 
@@ -28,6 +28,12 @@ export default function App() {
     setBuildingTransparent,
     doorMode,
     setDoorMode,
+    running,
+    setRunning,
+    targetIteration,
+    setTargetIteration,
+    stepBy,
+    refresh,
   } = useSimulationStore();
 
   useControls("Simulación", {
@@ -65,28 +71,40 @@ export default function App() {
       min: 0,
       max: 20,
       step: 0.5,
-      onChange: (v) => setParams({ lambda: v }),
+      onChange: (v) => {
+        setParams({ lambda: v });
+        refresh();
+      },
     },
     "κ (corporal)": {
       value: params.kappa,
       min: 0,
       max: 10,
       step: 0.5,
-      onChange: (v) => setParams({ kappa: v }),
+      onChange: (v) => {
+        setParams({ kappa: v });
+        refresh();
+      },
     },
     "α (convección)": {
       value: params.alpha,
       min: 0,
       max: 120,
       step: 1,
-      onChange: (v) => setParams({ alpha: v }),
+      onChange: (v) => {
+        setParams({ alpha: v });
+        refresh();
+      },
     },
     "T exterior (°C)": {
       value: params.T_ext,
       min: 10,
       max: 37,
       step: 0.5,
-      onChange: (v) => setParams({ T_ext: v }),
+      onChange: (v) => {
+        setParams({ T_ext: v });
+        refresh();
+      },
     },
   });
 
@@ -109,10 +127,49 @@ export default function App() {
     },
   });
 
+  // Control de navegación por iteraciones del método de sub y super-soluciones.
+  // Al pausar, se puede "fregar" (scrub) hasta la iteración deseada: la función
+  // devuelta `setMethod` permite sincronizar el slider con la iteración en vivo.
+  const [, setMethod] = useControls("Método (Sub/Super)", () => ({
+    Reproducción: {
+      value: running,
+      onChange: (v) => setRunning(v),
+    },
+    Iteración: {
+      value: targetIteration,
+      min: 0,
+      max: 5000,
+      step: 1,
+      transient: true,
+      onChange: (v) => setTargetIteration(v),
+    },
+    "−10": button(() => stepBy(-10)),
+    "−1": button(() => stepBy(-1)),
+    "+1": button(() => stepBy(1)),
+    "+10": button(() => stepBy(10)),
+  }));
+
+  // Sincroniza el slider con la iteración en vivo (mientras se reproduce) o con
+  // la iteración objetivo (mientras está pausado).
   useEffect(() => {
-    const interval = setInterval(() => updatePositions(), 100);
+    if (running) return;
+    setMethod({ Iteración: targetIteration });
+  }, [targetIteration, running, setMethod]);
+
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(() => {
+      setMethod({ Iteración: solverState.iteration });
+    }, 200);
+    return () => clearInterval(id);
+  }, [running, setMethod]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (running) updatePositions();
+    }, 100);
     return () => clearInterval(interval);
-  }, [updatePositions]);
+  }, [updatePositions, running]);
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#101216" }}>

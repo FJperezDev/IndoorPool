@@ -92,6 +92,10 @@ export const resetSolver = () => {
   solverState.maxGap = 1;
   solverState.supSub = 0;
   solverState.infSuper = 1;
+  telemetry.iteration = 0;
+  telemetry.maxGap = 1;
+  telemetry.supSub = 0;
+  telemetry.infSuper = 1;
   telemetry.history.length = 0;
 };
 
@@ -205,30 +209,10 @@ const sweep = (
 };
 
 // ---------------------------------------------------------------------------
-//  Avance del solver: `sweeps` pasadas por frame, actualizando AMBAS sucesiones
-//  y la telemetría de convergencia.
+//  Métricas y registro de telemetría (compartidos por el avance continuo y por
+//  la navegación manual a una iteración concreta)
 // ---------------------------------------------------------------------------
-export const stepSimulation = (
-  persons: Person[],
-  doorOpen: boolean,
-  sweeps: number,
-) => {
-  const field = buildPersonField(persons);
-
-  let maxWeight = 0;
-  for (let k = 0; k < field.weight.length; k++) {
-    if (field.weight[k] > maxWeight) maxWeight = field.weight[k];
-  }
-  // M = λ + κ·N_local ≥ sup |∂f/∂u|
-  const M = params.lambda + maxWeight;
-
-  for (let s = 0; s < sweeps; s++) {
-    sweep(solverState.sub, field, M, doorOpen);
-    sweep(solverState.super, field, M, doorOpen);
-    solverState.iteration++;
-  }
-
-  // Métricas de convergencia y cotas
+const computeMetrics = () => {
   let gap = 0;
   let supSub = -Infinity;
   let infSuper = Infinity;
@@ -238,21 +222,85 @@ export const stepSimulation = (
     if (solverState.sub[k] > supSub) supSub = solverState.sub[k];
     if (solverState.super[k] < infSuper) infSuper = solverState.super[k];
   }
-
   solverState.maxGap = gap;
   solverState.supSub = supSub;
   solverState.infSuper = infSuper;
-
   telemetry.iteration = solverState.iteration;
   telemetry.maxGap = gap;
   telemetry.supSub = supSub;
   telemetry.infSuper = infSuper;
-  telemetry.M = M;
+};
 
+const recordHistory = () => {
   if (solverState.iteration % HISTORY_STRIDE === 0) {
-    telemetry.history.push({ iter: solverState.iteration, gap });
+    telemetry.history.push({
+      iter: solverState.iteration,
+      gap: solverState.maxGap,
+    });
     if (telemetry.history.length > MAX_HISTORY) telemetry.history.shift();
   }
+};
+
+const buildFieldAndM = (persons: Person[]) => {
+  const field = buildPersonField(persons);
+  let maxWeight = 0;
+  for (let k = 0; k < field.weight.length; k++) {
+    if (field.weight[k] > maxWeight) maxWeight = field.weight[k];
+  }
+  // M = λ + κ·N_local ≥ sup |∂f/∂u|
+  const M = params.lambda + maxWeight;
+  return { field, M };
+};
+
+const advanceSweep = (field: PersonField, M: number, doorOpen: boolean) => {
+  sweep(solverState.sub, field, M, doorOpen);
+  sweep(solverState.super, field, M, doorOpen);
+  solverState.iteration++;
+};
+
+// ---------------------------------------------------------------------------
+//  Avance del solver: `sweeps` pasadas por frame, actualizando AMBAS sucesiones
+//  y la telemetría de convergencia.
+// ---------------------------------------------------------------------------
+export const stepSimulation = (
+  persons: Person[],
+  doorOpen: boolean,
+  sweeps: number,
+) => {
+  const { field, M } = buildFieldAndM(persons);
+
+  for (let s = 0; s < sweeps; s++) advanceSweep(field, M, doorOpen);
+
+  computeMetrics();
+  telemetry.M = M;
+  recordHistory();
+};
+
+// ---------------------------------------------------------------------------
+//  Navegación manual: reconstruye AMBAS sucesiones desde el estado inicial
+//  (u ≡ 0 y ū ≡ 1) hasta la iteración `targetIteration`, reconstruyendo también
+//  el historial de convergencia hasta ese punto.
+// ---------------------------------------------------------------------------
+export const gotoIteration = (
+  persons: Person[],
+  doorOpen: boolean,
+  targetIteration: number,
+) => {
+  const n = Math.max(0, Math.floor(targetIteration));
+  const { field, M } = buildFieldAndM(persons);
+
+  resetSolver();
+
+  for (let s = 0; s < n; s++) {
+    advanceSweep(field, M, doorOpen);
+    if (solverState.iteration % HISTORY_STRIDE === 0) {
+      computeMetrics();
+      recordHistory();
+    }
+  }
+
+  computeMetrics();
+  telemetry.M = M;
 };
 
 // ---------------------------------------------------------------------------
