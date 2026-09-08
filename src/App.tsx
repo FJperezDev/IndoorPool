@@ -1,7 +1,12 @@
 import { Canvas } from "@react-three/fiber";
 import { useControls, button, Leva } from "leva"; // <-- 1. Importa Leva
 import { useEffect } from "react";
-import { useSimulationStore, ViewMode } from "./store/useSimulationStore";
+import {
+  useSimulationStore,
+  ViewMode,
+  DoorMode,
+} from "./store/useSimulationStore";
+import { params, setParams } from "./math/subSuperSolver";
 import { Scene } from "./components/Scene";
 import { ConvergencePanel } from "./components/ConvergencePanel";
 
@@ -21,6 +26,8 @@ export default function App() {
     setSweepsPerFrame,
     buildingTransparent,
     setBuildingTransparent,
+    doorMode,
+    setDoorMode,
   } = useSimulationStore();
 
   useControls("Simulación", {
@@ -49,6 +56,49 @@ export default function App() {
       max: 40,
       step: 1,
       onChange: (v) => setSweepsPerFrame(v),
+    },
+  });
+
+  useControls("Parámetros", {
+    "λ (reacción)": {
+      value: params.lambda,
+      min: 0,
+      max: 20,
+      step: 0.5,
+      onChange: (v) => setParams({ lambda: v }),
+    },
+    "κ (corporal)": {
+      value: params.kappa,
+      min: 0,
+      max: 10,
+      step: 0.5,
+      onChange: (v) => setParams({ kappa: v }),
+    },
+    "α (convección)": {
+      value: params.alpha,
+      min: 0,
+      max: 120,
+      step: 1,
+      onChange: (v) => setParams({ alpha: v }),
+    },
+    "T exterior (°C)": {
+      value: params.T_ext,
+      min: -10,
+      max: 37,
+      step: 0.5,
+      onChange: (v) => setParams({ T_ext: v }),
+    },
+  });
+
+  useControls("Puerta", {
+    Modo: {
+      value: doorMode,
+      options: {
+        Automática: "auto",
+        Abierta: "open",
+        Cerrada: "closed",
+      },
+      onChange: (v) => setDoorMode(v as DoorMode),
     },
   });
 

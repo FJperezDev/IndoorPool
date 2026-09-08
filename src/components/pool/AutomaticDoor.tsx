@@ -4,17 +4,16 @@ import * as THREE from "three";
 import { useSimulationStore } from "../../store/useSimulationStore";
 
 export const AutomaticDoor = () => {
-  const persons = useSimulationStore((state) => state.persons);
+  const isDoorOpen = useSimulationStore((state) => state.isDoorOpen);
   const leftDoor = useRef<THREE.Mesh>(null);
   const rightDoor = useRef<THREE.Mesh>(null);
   const sensor = useRef<THREE.Mesh>(null);
 
   useFrame(() => {
     if (!leftDoor.current || !rightDoor.current) return;
-    const someoneIsNear = persons.some((p) => p.x > 8.5 && Math.abs(p.z) < 2);
 
-    const targetLeftZ = someoneIsNear ? -1.5 : -0.5;
-    const targetRightZ = someoneIsNear ? 1.5 : 0.5;
+    const targetLeftZ = isDoorOpen ? -1.5 : -0.5;
+    const targetRightZ = isDoorOpen ? 1.5 : 0.5;
 
     leftDoor.current.position.z = THREE.MathUtils.lerp(
       leftDoor.current.position.z,
@@ -29,8 +28,8 @@ export const AutomaticDoor = () => {
 
     if (sensor.current) {
       const m = sensor.current.material as THREE.MeshStandardMaterial;
-      m.emissive.setHex(someoneIsNear ? 0x22ff88 : 0x331111);
-      m.emissiveIntensity = someoneIsNear ? 1.4 : 0.6;
+      m.emissive.setHex(isDoorOpen ? 0x22ff88 : 0x331111);
+      m.emissiveIntensity = isDoorOpen ? 1.4 : 0.6;
     }
   });
 

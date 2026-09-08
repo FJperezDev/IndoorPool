@@ -108,6 +108,7 @@ export const ConvergencePanel = () => {
       ctx.fillStyle = "rgba(255,255,255,0.85)";
       ctx.font = "11px monospace";
       ctx.fillText(`iteración ${telemetry.iteration}`, 12, 22);
+      ctx.fillText(`M = ${telemetry.M.toFixed(2)}`, 12, 38);
 
       raf = requestAnimationFrame(draw);
     };

@@ -5,6 +5,8 @@ export type ActionStatus = "entering" | "wandering" | "swimming" | "exiting";
 
 export type ViewMode = "sub" | "super" | "gap" | "solution";
 
+export type DoorMode = "auto" | "open" | "closed";
+
 export interface Person {
   id: number;
   x: number;
@@ -19,6 +21,7 @@ interface SimState {
   persons: Person[];
   maxCapacity: number;
   isDoorOpen: boolean;
+  doorMode: DoorMode;
   viewMode: ViewMode;
   sweepsPerFrame: number;
   buildingTransparent: boolean;
@@ -30,6 +33,7 @@ interface SimState {
   setViewMode: (v: ViewMode) => void;
   setSweepsPerFrame: (n: number) => void;
   setBuildingTransparent: (v: boolean) => void;
+  setDoorMode: (m: DoorMode) => void;
   resetSimulation: () => void;
 }
 
@@ -51,6 +55,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   persons: [],
   maxCapacity: 50,
   isDoorOpen: false,
+  doorMode: "auto",
   viewMode: "solution",
   sweepsPerFrame: 12,
   buildingTransparent: true,
@@ -114,14 +119,14 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   updatePositions: () => {
     set((state) => {
       const nextPersons: Person[] = [];
-      let doorOpen = false;
+      let sensorOpen = false;
 
       state.persons.forEach((p) => {
         const dx = p.targetX - p.x;
         const dz = p.targetZ - p.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
 
-        if (p.x > 8.5 && Math.abs(p.z) < 2) doorOpen = true; // Sensor de puerta
+        if (p.x > 8.5 && Math.abs(p.z) < 2) sensorOpen = true; // Sensor de puerta
 
         if (dist < 0.5) {
           if (p.status === "exiting") return;
@@ -152,12 +157,19 @@ export const useSimulationStore = create<SimState>((set, get) => ({
           });
         }
       });
-      return { persons: nextPersons, isDoorOpen: doorOpen };
+      const isDoorOpen =
+        state.doorMode === "open"
+          ? true
+          : state.doorMode === "closed"
+            ? false
+            : sensorOpen;
+      return { persons: nextPersons, isDoorOpen };
     });
   },
 
   setViewMode: (viewMode) => set({ viewMode }),
   setSweepsPerFrame: (sweepsPerFrame) => set({ sweepsPerFrame }),
+  setDoorMode: (doorMode) => set({ doorMode }),
   resetSimulation: () => {
     resetSolver();
     set({ persons: [], isDoorOpen: false });

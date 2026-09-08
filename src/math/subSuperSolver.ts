@@ -28,16 +28,28 @@ export const GRID_SIZE = 64;
 // --- Temperaturas físicas (°C) ---
 const T_MIN = 10; // exterior en la puerta (escenario más frío)
 const T_MAX = 37; // temperatura corporal T_p
-const T_EXT = 18; // exterior tras las cristaleras
 
 // --- Temperaturas normalizadas u ∈ [0,1] ---
-export const U_EXT = (T_EXT - T_MIN) / (T_MAX - T_MIN); // ≈ 0.296
 export const U_DOOR = 0; // T = T_MIN = 10 °C (puerta abierta)
 
-// --- Parámetros del modelo ---
-export const LAMBDA = 5.0; // intensidad de la reacción logística (saturación)
-export const KAPPA = 2.0; // coeficiente de transferencia corporal por persona
-export const GAMMA = 0.5; // acoplamiento Robin adimensional (γ = α·h)
+// --- Parámetros del modelo (editables desde la interfaz) ---
+export interface SimParams {
+  lambda: number; // intensidad de la reacción logística (saturación)
+  kappa: number; // coeficiente de transferencia corporal por persona
+  alpha: number; // coeficiente convectivo Robin (γ = α·h)
+  T_ext: number; // temperatura exterior tras las cristaleras (°C)
+}
+
+export const params: SimParams = {
+  lambda: 5.0,
+  kappa: 2.0,
+  alpha: 31.5, // γ = α·h ≈ 0.5 con h = 1/63 (valor original del modelo)
+  T_ext: 18,
+};
+
+export const setParams = (p: Partial<SimParams>) => {
+  Object.assign(params, p);
+};
 
 // Tramos de la puerta en la pared derecha (x = +10). En coordenadas de malla,
 // la puerta ocupa z ∈ [-2, 2] → j ∈ [doorLo, doorHi].
@@ -94,6 +106,7 @@ export const telemetry = {
   maxGap: 1,
   supSub: 0,
   infSuper: 1,
+  M: params.lambda, // parámetro de estabilización M = λ + κ·N_local
   history: [] as { iter: number; gap: number }[],
 };
 
@@ -120,8 +133,8 @@ export const buildPersonField = (persons: Person[]): PersonField => {
     if (i >= 1 && i < GRID_SIZE - 1 && j >= 1 && j < GRID_SIZE - 1) {
       const idx = i * GRID_SIZE + j;
       const up = normalizeCelsius(p.temp);
-      weight[idx] += KAPPA;
-      source[idx] += KAPPA * up;
+      weight[idx] += params.kappa;
+      source[idx] += params.kappa * up;
     }
   });
   return { weight, source };
@@ -139,6 +152,8 @@ const sweep = (
 ) => {
   const N = GRID_SIZE;
   const center = 4 * NB + M;
+  const gamma = params.alpha * h; // γ = α·h (acoplamiento Robin adimensional)
+  const uExt = normalizeCelsius(params.T_ext);
 
   // Nodos interiores (plantilla de cinco puntos)
   for (let j = 1; j < N - 1; j++) {
@@ -146,7 +161,8 @@ const sweep = (
       const idx = i * N + j;
       const u = grid[idx];
       const f =
-        LAMBDA * u * (1 - u) + (field.source[idx] - field.weight[idx] * u);
+        params.lambda * u * (1 - u) +
+        (field.source[idx] - field.weight[idx] * u);
       const sum =
         grid[(i - 1) * N + j] +
         grid[(i + 1) * N + j] +
@@ -158,7 +174,7 @@ const sweep = (
 
   // Cristalera (pared trasera, j = 0): condición de Robin
   for (let i = 1; i < N - 1; i++) {
-    grid[i * N] = (grid[i * N + 1] + GAMMA * U_EXT) / (1 + GAMMA);
+    grid[i * N] = (grid[i * N + 1] + gamma * uExt) / (1 + gamma);
   }
 
   // Pared frontal (j = N-1): adiabática (Neumann)
@@ -204,7 +220,7 @@ export const stepSimulation = (
     if (field.weight[k] > maxWeight) maxWeight = field.weight[k];
   }
   // M = λ + κ·N_local ≥ sup |∂f/∂u|
-  const M = LAMBDA + maxWeight;
+  const M = params.lambda + maxWeight;
 
   for (let s = 0; s < sweeps; s++) {
     sweep(solverState.sub, field, M, doorOpen);
@@ -231,6 +247,7 @@ export const stepSimulation = (
   telemetry.maxGap = gap;
   telemetry.supSub = supSub;
   telemetry.infSuper = infSuper;
+  telemetry.M = M;
 
   if (solverState.iteration % HISTORY_STRIDE === 0) {
     telemetry.history.push({ iter: solverState.iteration, gap });
