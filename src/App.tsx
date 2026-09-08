@@ -1,6 +1,6 @@
 import { Canvas } from "@react-three/fiber";
 import { useControls, button, Leva } from "leva"; // <-- 1. Importa Leva
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   useSimulationStore,
   ViewMode,
@@ -35,6 +35,14 @@ export default function App() {
     stepBy,
     refresh,
   } = useSimulationStore();
+
+  const [maxIter, setMaxIter] = useState(5000);
+
+  useEffect(() => {
+    if (!running) {
+      setMaxIter(Math.max(1, solverState.iteration));
+    }
+  }, [running]);
 
   useControls("Simulación", {
     "Entrar (1 persona)": button(() => addPerson()),
@@ -130,24 +138,28 @@ export default function App() {
   // Control de navegación por iteraciones del método de sub y super-soluciones.
   // Al pausar, se puede "fregar" (scrub) hasta la iteración deseada: la función
   // devuelta `setMethod` permite sincronizar el slider con la iteración en vivo.
-  const [, setMethod] = useControls("Método (Sub/Super)", () => ({
-    Reproducción: {
-      value: running,
-      onChange: (v) => setRunning(v),
-    },
-    Iteración: {
-      value: targetIteration,
-      min: 0,
-      max: 5000,
-      step: 1,
-      transient: true,
-      onChange: (v) => setTargetIteration(v),
-    },
-    "−10": button(() => stepBy(-10)),
-    "−1": button(() => stepBy(-1)),
-    "+1": button(() => stepBy(1)),
-    "+10": button(() => stepBy(10)),
-  }));
+  const [, setMethod] = useControls(
+    "Método (Sub/Super)",
+    () => ({
+      Reproducción: {
+        value: running,
+        onChange: (v) => setRunning(v),
+      },
+      Iteración: {
+        value: targetIteration,
+        min: 0,
+        max: maxIter, // <--- Usamos el estado dinámico
+        step: 1,
+        transient: true,
+        onChange: (v) => setTargetIteration(v),
+      },
+      "−10": button(() => stepBy(-10)),
+      "−1": button(() => stepBy(-1)),
+      "+1": button(() => stepBy(1)),
+      "+10": button(() => stepBy(10)),
+    }),
+    [maxIter], // <--- Añadimos la dependencia para actualizar el esquema
+  );
 
   // Sincroniza el slider con la iteración en vivo (mientras se reproduce) o con
   // la iteración objetivo (mientras está pausado).
