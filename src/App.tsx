@@ -1,12 +1,12 @@
 import { Canvas } from "@react-three/fiber";
-import { useControls, button, Leva } from "leva"; // <-- 1. Importa Leva
-import { useEffect, useState } from "react";
+import { useControls, button, Leva } from "leva";
+import { useEffect } from "react";
 import {
   useSimulationStore,
   ViewMode,
   DoorMode,
 } from "./store/useSimulationStore";
-import { params, setParams, solverState } from "./math/subSuperSolver";
+import { params, setParams } from "./math/subSuperSolver";
 import { Scene } from "./components/Scene";
 import { ConvergencePanel } from "./components/ConvergencePanel";
 
@@ -30,19 +30,9 @@ export default function App() {
     setDoorMode,
     running,
     setRunning,
-    targetIteration,
-    setTargetIteration,
     stepBy,
     refresh,
   } = useSimulationStore();
-
-  const [maxIter, setMaxIter] = useState(5000);
-
-  useEffect(() => {
-    if (!running) {
-      setMaxIter(Math.max(1, solverState.iteration));
-    }
-  }, [running]);
 
   useControls("Simulación", {
     "Entrar (1 persona)": button(() => addPerson()),
@@ -136,45 +126,25 @@ export default function App() {
   });
 
   // Control de navegación por iteraciones del método de sub y super-soluciones.
-  // Al pausar, se puede "fregar" (scrub) hasta la iteración deseada: la función
-  // devuelta `setMethod` permite sincronizar el slider con la iteración en vivo.
-  const [, setMethod] = useControls(
-    "Método (Sub/Super)",
-    () => ({
+  useControls("Método (Sub/Super)", () => {
+    // Retorna 'true' (visible) cuando "Reproducción" es 'false' (pausado).
+    const showWhenPaused = (get: any) =>
+      !get("Método (Sub/Super).Reproducción");
+
+    return {
       Reproducción: {
         value: running,
         onChange: (v) => setRunning(v),
       },
-      Iteración: {
-        value: targetIteration,
-        min: 0,
-        max: maxIter, // <--- Usamos el estado dinámico
-        step: 1,
-        transient: true,
-        onChange: (v) => setTargetIteration(v),
-      },
+      // Añadimos el render a los botones para que se oculten en reproducción
+      "−1000": button(() => stepBy(-1000)),
+      "−100": button(() => stepBy(-100)),
       "−10": button(() => stepBy(-10)),
-      "−1": button(() => stepBy(-1)),
-      "+1": button(() => stepBy(1)),
       "+10": button(() => stepBy(10)),
-    }),
-    [maxIter], // <--- Añadimos la dependencia para actualizar el esquema
-  );
-
-  // Sincroniza el slider con la iteración en vivo (mientras se reproduce) o con
-  // la iteración objetivo (mientras está pausado).
-  useEffect(() => {
-    if (running) return;
-    setMethod({ Iteración: targetIteration });
-  }, [targetIteration, running, setMethod]);
-
-  useEffect(() => {
-    if (!running) return;
-    const id = setInterval(() => {
-      setMethod({ Iteración: solverState.iteration });
-    }, 200);
-    return () => clearInterval(id);
-  }, [running, setMethod]);
+      "+100": button(() => stepBy(100)),
+      "+1000": button(() => stepBy(1000)),
+    };
+  });
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -185,7 +155,6 @@ export default function App() {
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#101216" }}>
-      {/* 2. Añade este componente para forzar el ancho (ej. 350px o 400px) */}
       <Leva theme={{ sizes: { rootWidth: "360px" } }} />
 
       <header
