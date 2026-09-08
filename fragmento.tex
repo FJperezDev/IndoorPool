@@ -1,0 +1,308 @@
+% !TeX root = ../tfg.tex
+% !TeX encoding = utf8
+%
+% ============================================================================
+%  EJEMPLO 4: CLIMATIZACIÓN DE UNA PISCINA CUBIERTA (2D, CONDICIONES MIXTAS)
+% ----------------------------------------------------------------------------
+%  FRAGMENTO A INSERTAR EN:  capitulos/04-granjaServidores.tex
+%
+%  UBICACIÓN EXACTA (en 04-granjaServidores.tex):
+%    * Insertar justo DESPUÉS del cierre del "Ejemplo 3: Extensión a 2D
+%      Frank-Kamenetskii" (es decir, después de la línea que contiene el
+%      \end{itemize} que cierra la subsección "Resultados numéricos" de la
+%      sección \ref{sec:ejemplo_fk2d}).
+%    * Y ANTES de la línea "\section{Contraste de los Modelos}".
+%
+%  Concretamente, pegar este bloque entre:
+%       \end{itemize}            <- final de "Ejemplo 3"
+%       (AQUÍ VA ESTE FRAGMENTO)
+%       \section{Contraste de los Modelos}
+%
+%  NOTA: al insertarlo, las secciones "Contraste de los Modelos",
+%  "Estudio de la Tasa de Convergencia" y "Convergencia en Malla" se
+%  renumeran automáticamente (LaTeX lo gestiona). Opcionalmente, actualizar la
+%  Tabla~\ref{tab:contraste} añadiendo una cuarta columna (se propone el
+%  bloque al final de este archivo, comentado).
+%
+%  FIGURAS NECESARIAS (capturas de la aplicación 3D interactiva):
+%    * piscina_sub_super.png   : sub-solución, super-solución y solución.
+%    * piscina_convergencia.png: decaimiento del gap (escala logarítmica).
+%    * piscina_app.png         : captura de la aplicación 3D interactiva.
+% ============================================================================
+
+\section{Ejemplo 4: Climatización de una Piscina Cubierta (2D con Condiciones de Contorno Mixtas)}
+\label{sec:ejemplo_piscina}
+
+\subsection{Contexto y formulación}
+
+Este último ejemplo traslada el método a un escenario físico concreto: la
+\textbf{distribución estacionaria de temperatura en una piscina cubierta}. A
+diferencia de los ejemplos anteriores, aquí la frontera $\partial\Omega$ no
+admite un único tipo de condición de contorno, sino que se descompone en
+tres tramos con comportamientos termodinámicos distintos (envolvente acristalada,
+hueco de puerta y cerramiento opaco), lo que conduce a un problema con
+\textbf{condiciones de contorno mixtas}. El interés del ejemplo es doble: por un
+lado, muestra que la iteración monótona se adapta sin dificultad a problemas
+que no son de Dirichlet puro; por otro, el término no lineal acopla dos
+mecanismos físicos de naturaleza distinta (saturación por evaporación y fuentes
+de calor corporales), lo que enriquece la estructura de $f(x,u)$.
+
+El dominio $\Omega \subset \mathbb{R}^2$ representa la planta de la instalación
+(una sala rectangular con un vaso de piscina centrado). La temperatura se
+trabaja en una \textbf{variable normalizada}
+\begin{equation}\label{eq:piscina_normalizacion}
+  u(x) = \frac{T(x) - T_{\min}}{T_{p} - T_{\min}} \in [0,1],
+  \qquad
+  T_{\min} = 10\,^{\circ}\mathrm{C}, \quad T_{p} = 37\,^{\circ}\mathrm{C},
+\end{equation}
+de modo que $u = 0$ corresponde al valor más frío (el exterior en la puerta,
+$T_{\min} = 10\,^{\circ}\mathrm{C}$) y $u = 1$ a la temperatura corporal
+$T_{p} \approx 37\,^{\circ}\mathrm{C}$. Esta normalización es la que permite que
+la no linealidad logística $u(1-u)$ esté bien definida sobre el intervalo
+$[0,1]$.
+
+La distribución estacionaria de temperatura se rige por la ecuación de
+reacción--difusión
+\begin{equation}\label{eq:piscina_modelo}
+  -\Delta u(x) = \lambda\, u(x)\bigl(1 - u(x)\bigr)
+  + \sum_{i=1}^{N_{\mathrm{pers}}} \kappa_i(x)\,\bigl(u_{p,i} - u(x)\bigr),
+  \qquad x \in \Omega,
+\end{equation}
+donde $\lambda > 0$ y $N_{\mathrm{pers}}$ es el número de personas presentes en
+la sala. El término no lineal $f(x,u)$ acopla dos mecanismos termodinámicos
+locales:
+
+\begin{itemize}
+  \item \textbf{Saturación por evaporación:} el agua transfiere calor al
+  ambiente, pero la tasa térmica decae conforme el aire se satura. Se modela
+  mediante la función logística $\lambda u(1-u)$, donde $\lambda > 0$ es la
+  intensidad del proceso. El factor $u$ representa el impulso evaporativo
+  (creciente con la temperatura) y el factor $(1-u)$ la saturación: a medida que
+  el ambiente se acerca al límite caliente ($u \to 1$), el intercambio se
+  amortigua.
+
+  \item \textbf{Fuentes de calor corporales:} cada persona actúa como una fuente
+  local acoplada. Cada individuo $i$ posee una temperatura corporal normalizada
+  $u_{p,i} \in [0,1]$ (típicamente $u_{p,i} \approx 1$, pues
+  $T_{p} \approx 37\,^{\circ}\mathrm{C}$), y la transferencia es proporcional al
+  gradiente térmico entre la persona y el ambiente, $u_{p,i} - u(x)$. La función
+  indicadora $\kappa_i(x)$ concentra esta contribución en la posición del
+  individuo $i$: $\kappa_i(x) = \kappa > 0$ si $x$ se encuentra en la celda
+  ocupada por el individuo $i$, y $\kappa_i(x) = 0$ en otro caso. Nótese que este
+  término desaparece cuando la temperatura ambiente iguala la corporal del
+  individuo ($u = u_{p,i}$).
+\end{itemize}
+
+\subsection{Condiciones de contorno mixtas}
+
+La frontera $\partial\Omega$ se divide en tres tramos según el comportamiento
+físico de las envolventes del edificio (Figura~\ref{fig:piscina_app}):
+
+\begin{equation}\label{eq:piscina_cc}
+  \begin{cases}
+    \dfrac{\partial u}{\partial n} + \alpha(x)\, u = \alpha(x)\, u_{\mathrm{ext}},
+      & x \in \partial\Omega_{\mathrm{cristal}}, \\[8pt]
+    u(x) = u_{\mathrm{puerta}},
+      & x \in \partial\Omega_{\mathrm{puerta}}, \\[8pt]
+    \dfrac{\partial u}{\partial n} = 0,
+      & x \in \partial\Omega_{\mathrm{aislada}},
+  \end{cases}
+\end{equation}
+donde
+\begin{itemize}
+  \item $\partial\Omega_{\mathrm{cristal}}$ es la \textbf{cristalera} (pared
+  trasera): condición de Robin (tercer tipo) que modela la convección térmica
+  proporcional a la diferencia con el exterior. Aquí
+  $u_{\mathrm{ext}} = (T_{\mathrm{ext}} - T_{\min})/(T_{p} - T_{\min})$
+  con $T_{\mathrm{ext}} = 18\,^{\circ}\mathrm{C}$, de modo que
+  $u_{\mathrm{ext}} \approx 0.30$;
+  \item $\partial\Omega_{\mathrm{puerta}}$ es el \textbf{hueco de la puerta}
+  automática: condición de Dirichlet pura que impone una severa pérdida de calor
+  cuando la puerta se abre, forzando la temperatura local al valor exterior
+  $u_{\mathrm{puerta}} = 0$ (esto es, $T_{\min} = 10\,^{\circ}\mathrm{C}$);
+  \item $\partial\Omega_{\mathrm{aislada}}$ es el resto del cerramiento opaco,
+  tratado como adiabático (condición de Neumann homogénea).
+\end{itemize}
+
+\subsection{Construcción de sub y super-soluciones}
+
+Para aplicar el Teorema~\ref{teo:comparacion} necesitamos un par ordenado de
+estimaciones iniciales. En este problema, las constantes son candidatas
+naturales y verifican de forma inmediata las desigualdades diferenciales y de
+contorno (Definición~\ref{def:subsuper}, extendida a condiciones mixtas):
+
+\begin{itemize}
+  \item \textbf{Sub-solución:} $\underline{u} \equiv 0$, el escenario térmico más
+  frío posible (piscina vacía, puertas abiertas permanentemente). En el interior,
+  \begin{equation*}
+    -\Delta \underline{u} = 0 \leq f(x, 0) = \lambda \cdot 0 \cdot 1
+    + \sum_{i} \kappa_i(x)\, u_{p,i} \geq 0,
+  \end{equation*}
+  con igualdad cuando la sala está vacía ($N_{\mathrm{pers}} = 0$). En la
+  frontera: en la puerta $\underline{u} = 0 = u_{\mathrm{puerta}}$; en la
+  cristalera $0 \leq u_{\mathrm{ext}}$; y en el cerramiento adiabático
+  $\partial_n \underline{u} = 0$.
+
+  \item \textbf{Super-solución:} $\overline{u} \equiv 1$, el límite térmico
+  superior (aforo completo, cerramiento total). En el interior,
+  \begin{equation*}
+    -\Delta \overline{u} = 0 \geq f(x, 1) = \lambda \cdot 1 \cdot 0
+    + \sum_{i} \kappa_i(x)\,(u_{p,i} - 1) \leq 0,
+  \end{equation*}
+  pues $u_{p,i} \leq 1$. En la frontera: en la puerta
+  $\overline{u} = 1 \geq u_{\mathrm{puerta}} = 0$; en la cristalera
+  $1 \geq u_{\mathrm{ext}}$; y en el cerramiento adiabático
+  $\partial_n \overline{u} = 0$.
+\end{itemize}
+
+Ambas constantes son $C^{2}$ y están ordenadas, $\underline{u} \leq
+\overline{u}$, por lo que constituyen un par válido de sub y super-solución.
+Obsérvese que la super-solución $\overline{u} \equiv 1$ no iguala el dato de
+Dirichlet en la puerta ($u_{\mathrm{puerta}} = 0$): basta con que lo acote por
+arriba, tal y como exige la Definición~\ref{def:subsuper}.
+
+\subsection{Parámetro de estabilización $M$}
+
+La derivada parcial de la no linealidad respecto de $u$ es
+\begin{equation}\label{eq:piscina_derivada}
+  \frac{\partial f}{\partial u}(x,u) = \lambda\bigl(1 - 2u\bigr)
+  - \sum_{i=1}^{N_{\mathrm{pers}}} \kappa_i(x),
+\end{equation}
+cuyo módulo sobre $u \in [0,1]$ está acotado por
+$\lambda + \max_{x} \sum_i \kappa_i(x)$. Por la
+Proposición~\ref{prop:eleccionM}, el parámetro de estabilización se toma como
+\begin{equation}\label{eq:piscina_M}
+  M = \lambda + \kappa\, N_{\mathrm{local}},
+\end{equation}
+donde $N_{\mathrm{local}} = \max_{x} \sum_i \mathbf{1}_{\{\kappa_i(x)>0\}}$ es
+el máximo número de personas que comparten una misma celda de la malla. En la
+práctica $N_{\mathrm{local}} = 1$ (las personas rara vez ocupan la misma celda),
+por lo que con $\lambda = 5$ y $\kappa = 2$ resulta $M = 7$. A diferencia del
+modelo de Frank-Kamenetskii, $M$ queda ajustado a la constante de Lipschitz
+efectiva, lo que favorece una convergencia rápida.
+
+\subsection{Discretización y estructura de $M$-matriz}
+
+El laplaciano se discretiza mediante la plantilla de cinco puntos sobre una malla
+uniforme de $N_x \times N_y$ puntos (en la aplicación interactiva se emplea
+$64 \times 64 = 4096$ incógnitas), siguiendo el esquema del
+Apéndice~\ref{ape:codigo}. La iteración monótona discreta es
+\begin{equation}\label{eq:piscina_iteracion}
+  (A_h + M I)\,\mathbf{u}^{(k+1)}
+  = \mathbf{f}\bigl(\mathbf{u}^{(k)}\bigr) + M\,\mathbf{u}^{(k)},
+\end{equation}
+que coincide formalmente con \eqref{eq:iteracion_discreta}. La novedad reside en
+el tratamiento de las condiciones de contorno mixtas:
+
+\begin{itemize}
+  \item \textbf{Dirichlet (puerta):} el valor $u_{\mathrm{puerta}} = 0$ se fija
+  en los nodos de $\partial\Omega_{\mathrm{puerta}}$ cuando la puerta está
+  abierta; cuando está cerrada, ese tramo pasa a ser adiabático.
+
+  \item \textbf{Robin (cristalera):} discretizando la derivada normal con una
+  diferencia finita descentrada de paso $h$, la condición
+  \eqref{eq:piscina_cc} sobre un nodo frontera $u_b$ con vecino interior
+  $u_{\mathrm{int}}$ se reduce a
+  \begin{equation}\label{eq:piscina_robin_discreta}
+    u_b = \frac{u_{\mathrm{int}} + \gamma\, u_{\mathrm{ext}}}{1 + \gamma},
+    \qquad \gamma = \alpha\, h,
+  \end{equation}
+  donde $\gamma$ es el acoplamiento convectivo adimensional. Nótese que la
+  fórmula es una media convexa de $u_{\mathrm{int}}$ y $u_{\mathrm{ext}}$, lo que
+  respeta el principio del máximo.
+
+  \item \textbf{Neumann (cerramiento):} se impone $u_b = u_{\mathrm{int}}$ en
+  los nodos adiabáticos (espejo del vecino interior).
+\end{itemize}
+
+Con independencia de la condición aplicada, la matriz del sistema $A_h + M I$
+sigue siendo una \textbf{$M$-matriz} no singular: diagonalmente dominante
+estricta, con diagonal positiva y elementos extradiagonales no positivos. En
+consecuencia $(A_h + M I)^{-1} \geq 0$ y el principio del máximo discreto se
+preserva (Observación~\ref{obs:max_discreto}), lo que garantiza que las dos
+sucesiones generadas desde $\underline{u}$ y $\overline{u}$ sean monótonas,
+acotadas y converjan a la distribución real de temperaturas del edificio.
+
+\subsection{Resultados numéricos y visualización interactiva}
+
+La Figura~\ref{fig:piscina_sub_super} muestra la convergencia del método. La
+sub-solución (partiendo de $u \equiv 0$) \textbf{crece} monótonamente mientras
+la super-solución (partiendo de $u \equiv 1$) \textbf{decrece}, encajonando la
+solución de equilibrio $u^{*}$ en la cadena de orden
+$\underline{u} \leq u_1 \leq \cdots \leq u^{*} \leq \cdots \leq \overline{u}_1
+\leq \overline{u}$ predicha por el Teorema~\ref{teo:comparacion}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{piscina_sub_super.png}
+  \caption{Convergencia del método de sub y super-soluciones para el modelo de
+  climatización de la piscina. \textbf{Arriba:} sub-solución inicial ($u \equiv
+  0$, escenario más frío) y super-solución inicial ($u \equiv 1$, aforo
+  completo). \textbf{Abajo:} solución de equilibrio con las fuentes corporales
+  (personas) y el frente frío de la puerta abierta.}
+  \label{fig:piscina_sub_super}
+\end{figure}
+
+El perfil de equilibrio resultante refleja los dos mecanismos del modelo: un
+frente frío que penetra desde la puerta abierta (condición de Dirichlet) y una
+capa templada junto a la cristalera (condición de Robin), mientras las personas
+generan focos locales de calor que se difunden por la sala. El decaimiento del
+\textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$ en escala
+logarítmica (Figura~\ref{fig:piscina_convergencia}) confirma la convergencia
+lineal asintótica característica del método.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.85\textwidth]{piscina_convergencia.png}
+  \caption{Decaimiento del error en escala logarítmica para el modelo de la
+  piscina. El \textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$
+  entre ambas sucesiones decrece de forma aproximadamente lineal en escala
+  semilogarítmica, evidenciando la convergencia monótona hacia la solución de
+  equilibrio.}
+  \label{fig:piscina_convergencia}
+\end{figure}
+
+A diferencia de los ejemplos 1D, este modelo cuenta con una \textbf{aplicación
+3D interactiva} (desarrollada con TypeScript y Three.js) que permite añadir o
+retirar personas en tiempo real y observar cómo ambas sucesiones se reajustan
+hacia el nuevo equilibrio, así como alternar la visualización entre la
+sub-solución, la super-solución, el \textit{gap} $\overline{u} - \underline{u}$
+y la solución de equilibrio. La Figura~\ref{fig:piscina_app} muestra una captura
+de dicha aplicación, que complementa la validación numérica con una
+visualización orientada a la defensa del trabajo.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\textwidth]{piscina_app.png}
+  \caption{Captura de la aplicación 3D interactiva del modelo de la piscina. El
+  mapa de calor sobre el suelo representa la temperatura normalizada; los
+  controles permiten modificar el aforo, abrir o cerrar la puerta y alternar
+  entre sub-solución, super-solución y solución de equilibrio.}
+  \label{fig:piscina_app}
+\end{figure}
+
+% ============================================================================
+%  OPCIONAL: actualización de la Tabla~\ref{tab:contraste} ("Contraste de los
+%  Modelos") para incluir este cuarto ejemplo. Descomentar y añadir una cuarta
+%  columna a dicha tabla, junto con las filas correspondientes.
+% ============================================================================
+%
+% En el preámbulo de la tabla, cambiar
+%   \begin{tabular}{@{}lccc@{}}
+% por
+%   \begin{tabular}{@{}lcccc@{}}
+% y en la cabecera añadir "& \textbf{Piscina 2D} \\".
+%
+% Filas a añadir (alineadas con las ya existentes):
+%   $f(u)$                              & $\lambda e^{u}$   & $\lambda u(1-u)$   & $\lambda e^{u}$ & $\lambda u(1-u) + \sum_i \kappa_i(u_{p,i}-u)$ \\
+%   No linealidad                       & Exponencial       & Logística          & Exponencial     & Logística + fuentes locales \\
+%   Convexidad                          & Convexa           & Cóncava            & Convexa         & Mixta (depende de $x$) \\
+%   Dimensión                           & 1D                & 1D                 & 2D              & 2D \\
+%   Incógnitas                          & 100               & 100                & 2\,500          & 4\,096 \\
+%   $L$ (Lipschitz)                     & $\lambda e^{u_{\max}}$ & $\lambda$     & $\lambda e^{u_{\max}}$ & $\lambda + \kappa N_{\mathrm{local}}$ \\
+%   $M$ empleado                        & $\lambda e^{2.5} \approx 24.36$ & $6$ & $\lambda e^{2.5} \approx 12.18$ & $7$ \\
+%   $\lambda$                           & $2$               & $5$                & $1$             & $5$ \\
+%   Cond. Contorno                      & $u=0$ extremos    & $0.9,\,0.1$ extremos & $u=0$ en $\partial\Omega$ & Robin + Dirichlet + Neumann \\
+%   Iteraciones (sub)                   & $48$              & $12$               & $14$            & (medido en la app) \\
+%   Iteraciones (super)                 & $53$              & $12$               & $17$            & (medido en la app) \\
+%   Unicidad                           & No trivial\textsuperscript{1} & Sugerida & No trivial & Sugerida \\

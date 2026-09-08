@@ -1,0 +1,11 @@
+---
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tfg_pool_web_prod
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    # Tu proxy (Ej: Traefik, Nginx Proxy Manager, Caddy) apuntará a la IP de este contenedor al puerto 3000
