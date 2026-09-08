@@ -127,10 +127,6 @@ export default function App() {
 
   // Control de navegación por iteraciones del método de sub y super-soluciones.
   useControls("Método (Sub/Super)", () => {
-    // Retorna 'true' (visible) cuando "Reproducción" es 'false' (pausado).
-    const showWhenPaused = (get: any) =>
-      !get("Método (Sub/Super).Reproducción");
-
     return {
       Reproducción: {
         value: running,

@@ -32,8 +32,17 @@ export const ConvergencePanel = () => {
     if (!ctx) return;
 
     let raf = 0;
+    let lastIteration = -1;
 
     const draw = () => {
+      // El canvas sólo repinta cuando la iteración cambia (p.ej. en pausa no
+      // se redibuja a 60 fps en vano).
+      if (telemetry.iteration === lastIteration) {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
+      lastIteration = telemetry.iteration;
+
       const dpr = window.devicePixelRatio || 1;
       const cssW = canvas.clientWidth;
       const cssH = canvas.clientHeight;

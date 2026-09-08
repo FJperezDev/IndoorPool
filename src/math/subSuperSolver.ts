@@ -128,9 +128,33 @@ export interface PersonField {
 
 export const normalizeCelsius = (t: number) => (t - T_MIN) / (T_MAX - T_MIN);
 
+// El campo de fuentes sólo depende de `persons` y de `params.kappa`; se cachea
+// y se reutilizan los buffers para no asignar ~32 KB por frame (evita picos de
+// GC durante la animación). Se invalida automáticamente al cambiar la lista de
+// personas (referencia) o el coeficiente κ.
+let fieldCache: {
+  personsRef: Person[];
+  kappa: number;
+  field: PersonField;
+  maxWeight: number;
+} | null = null;
+
 export const buildPersonField = (persons: Person[]): PersonField => {
-  const weight = new Float32Array(GRID_SIZE * GRID_SIZE);
-  const source = new Float32Array(GRID_SIZE * GRID_SIZE);
+  const hit =
+    fieldCache &&
+    fieldCache.personsRef === persons &&
+    fieldCache.kappa === params.kappa
+      ? fieldCache
+      : null;
+  if (hit) return hit.field;
+
+  const size = GRID_SIZE * GRID_SIZE;
+  const weight = fieldCache ? fieldCache.field.weight : new Float32Array(size);
+  const source = fieldCache ? fieldCache.field.source : new Float32Array(size);
+  weight.fill(0);
+  source.fill(0);
+
+  let maxWeight = 0;
   persons.forEach((p) => {
     const i = Math.round(((p.x + 10) / 20) * (GRID_SIZE - 1));
     const j = Math.round(((p.z + 10) / 20) * (GRID_SIZE - 1));
@@ -139,9 +163,13 @@ export const buildPersonField = (persons: Person[]): PersonField => {
       const up = normalizeCelsius(p.temp);
       weight[idx] += params.kappa;
       source[idx] += params.kappa * up;
+      if (weight[idx] > maxWeight) maxWeight = weight[idx];
     }
   });
-  return { weight, source };
+
+  const field = { weight, source };
+  fieldCache = { personsRef: persons, kappa: params.kappa, field, maxWeight };
+  return field;
 };
 
 // ---------------------------------------------------------------------------
@@ -158,15 +186,16 @@ const sweep = (
   const center = 4 * NB + M;
   const gamma = params.alpha * h; // γ = α·h (acoplamiento Robin adimensional)
   const uExt = normalizeCelsius(params.T_ext);
+  const lambda = params.lambda;
+  const src = field.source;
+  const wgt = field.weight;
 
   // Nodos interiores (plantilla de cinco puntos)
   for (let j = 1; j < N - 1; j++) {
     for (let i = 1; i < N - 1; i++) {
       const idx = i * N + j;
       const u = grid[idx];
-      const f =
-        params.lambda * u * (1 - u) +
-        (field.source[idx] - field.weight[idx] * u);
+      const f = lambda * u * (1 - u) + (src[idx] - wgt[idx] * u);
       const sum =
         grid[(i - 1) * N + j] +
         grid[(i + 1) * N + j] +
@@ -243,12 +272,8 @@ const recordHistory = () => {
 
 const buildFieldAndM = (persons: Person[]) => {
   const field = buildPersonField(persons);
-  let maxWeight = 0;
-  for (let k = 0; k < field.weight.length; k++) {
-    if (field.weight[k] > maxWeight) maxWeight = field.weight[k];
-  }
   // M = λ + κ·N_local ≥ sup |∂f/∂u|
-  const M = params.lambda + maxWeight;
+  const M = params.lambda + (fieldCache?.maxWeight ?? 0);
   return { field, M };
 };
 
@@ -338,6 +363,19 @@ export const colorMap = (t: number): [number, number, number] => {
   const last = stops[stops.length - 1];
   return [last[1], last[2], last[3]];
 };
+
+// Tabla de color precalculada (256 niveles RGB) para el mapa de calor. Evita
+// llamar a `colorMap` (que asigna arrays) por cada píxel y cada frame.
+export const TURBO_LUT = (() => {
+  const lut = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const [r, g, b] = colorMap(i / 255);
+    lut[i * 3] = r;
+    lut[i * 3 + 1] = g;
+    lut[i * 3 + 2] = b;
+  }
+  return lut;
+})();
 
 export const cssGradient = (): string => {
   const parts = TURBO_STOPS.map(

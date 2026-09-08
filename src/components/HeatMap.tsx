@@ -6,31 +6,18 @@ import {
   GRID_SIZE,
   solverState,
   stepSimulation,
-  colorMap,
+  TURBO_LUT,
 } from "../math/subSuperSolver";
 
-const UPSCALE = 2;
-const W = GRID_SIZE * UPSCALE;
-const H = GRID_SIZE * UPSCALE;
+// El canvas se dibuja a la resolución nativa de la malla (GRID_SIZE × GRID_SIZE)
+// y el upscaling lo hace la GPU mediante LinearFilter. Esto evita el muestreo
+// bilineal en JS (128×128 con 4 accesos por píxel) y reduce el trabajo por
+// frame ~4×, con un resultado visual equivalente.
+const W = GRID_SIZE;
+const H = GRID_SIZE;
 
-// Muestreo bilineal de un campo escalar (índice fila-mayor i*N + j)
-const sample = (view: Float32Array, fx: number, fy: number): number => {
-  const x = Math.min(Math.max(fx, 0), GRID_SIZE - 1.0001);
-  const y = Math.min(Math.max(fy, 0), GRID_SIZE - 1.0001);
-  const x0 = Math.floor(x);
-  const y0 = Math.floor(y);
-  const x1 = Math.min(x0 + 1, GRID_SIZE - 1);
-  const y1 = Math.min(y0 + 1, GRID_SIZE - 1);
-  const tx = x - x0;
-  const ty = y - y0;
-  const v00 = view[x0 * GRID_SIZE + y0];
-  const v10 = view[x1 * GRID_SIZE + y0];
-  const v01 = view[x0 * GRID_SIZE + y1];
-  const v11 = view[x1 * GRID_SIZE + y1];
-  const top = v00 * (1 - tx) + v10 * tx;
-  const bot = v01 * (1 - tx) + v11 * tx;
-  return top * (1 - ty) + bot * ty;
-};
+const ALPHA_VIEW = 200;
+const GAP_ALPHA_SCALE = 700;
 
 export const HeatMap = () => {
   const persons = useSimulationStore((s) => s.persons);
@@ -48,6 +35,7 @@ export const HeatMap = () => {
     canvas.height = H;
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearFilter;
+    texture.generateMipmaps = false;
     const ctx = canvas.getContext("2d");
     imgData.current = ctx ? ctx.createImageData(W, H) : null;
   }, [canvas, texture]);
@@ -60,32 +48,28 @@ export const HeatMap = () => {
 
     const data = imgData.current.data;
     const { sub, super: sup } = solverState;
+    const size = GRID_SIZE * GRID_SIZE;
 
-    for (let py = 0; py < H; py++) {
-      for (let px = 0; px < W; px++) {
-        const fx = px / UPSCALE;
-        const fy = py / UPSCALE;
-        const idx = (py * W + px) * 4;
-
-        if (viewMode === "gap") {
-          const g = Math.max(0, sample(sup, fx, fy) - sample(sub, fx, fy));
-          data[idx] = 255;
-          data[idx + 1] = Math.round(60 * (1 - g));
-          data[idx + 2] = Math.round(60 * (1 - g));
-          data[idx + 3] = Math.min(255, Math.round(g * 700));
-        } else {
-          const v =
-            viewMode === "sub"
-              ? sample(sub, fx, fy)
-              : viewMode === "super"
-                ? sample(sup, fx, fy)
-                : (sample(sub, fx, fy) + sample(sup, fx, fy)) / 2;
-          const [r, g, b] = colorMap(v);
-          data[idx] = r;
-          data[idx + 1] = g;
-          data[idx + 2] = b;
-          data[idx + 3] = 200;
-        }
+    if (viewMode === "gap") {
+      for (let k = 0; k < size; k++) {
+        const g = sup[k] > sub[k] ? sup[k] - sub[k] : 0;
+        const o = k * 4;
+        data[o] = 255;
+        data[o + 1] = Math.round(60 * (1 - g));
+        data[o + 2] = Math.round(60 * (1 - g));
+        data[o + 3] = Math.min(255, Math.round(g * GAP_ALPHA_SCALE));
+      }
+    } else {
+      const field =
+        viewMode === "sub" ? sub : viewMode === "super" ? sup : null;
+      for (let k = 0; k < size; k++) {
+        const v = field ? field[k] : (sub[k] + sup[k]) / 2;
+        const c = Math.max(0, Math.min(255, (v * 255) | 0));
+        const o = k * 4;
+        data[o] = TURBO_LUT[c * 3];
+        data[o + 1] = TURBO_LUT[c * 3 + 1];
+        data[o + 2] = TURBO_LUT[c * 3 + 2];
+        data[o + 3] = ALPHA_VIEW;
       }
     }
 
