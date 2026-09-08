@@ -124,6 +124,83 @@ donde
   tratado como adiabático (condición de Neumann homogénea).
 \end{itemize}
 
+\subsection{Extensión de la definición a condiciones de contorno mixtas}
+
+La Definición~\ref{def:subsuper} está enunciada para el problema de Dirichlet
+\eqref{eq:problema_nolineal}, en el que toda la frontera comparte la misma
+condición $u = g$. Para trasladarla al problema mixto \eqref{eq:piscina_cc} basta
+sustituir, en cada tramo de la frontera, la desigualdad de contorno por la
+correspondiente al tipo de condición impuesto en ese tramo:
+
+\begin{itemize}
+  \item \textbf{Sub-solución:} $-\Delta \underline{u} \leq f(x,\underline{u})$ en
+  $\Omega$; en la puerta $\underline{u} \leq u_{\mathrm{puerta}}$; en la
+  cristalera $\partial_n \underline{u} + \alpha\,\underline{u} \leq
+  \alpha\,u_{\mathrm{ext}}$; y en el cerramiento adiabático
+  $\partial_n \underline{u} \leq 0$.
+
+  \item \textbf{Super-solución:} $-\Delta \overline{u} \geq f(x,\overline{u})$ en
+  $\Omega$; en la puerta $\overline{u} \geq u_{\mathrm{puerta}}$; en la
+  cristalera $\partial_n \overline{u} + \alpha\,\overline{u} \geq
+  \alpha\,u_{\mathrm{ext}}$; y en el cerramiento adiabático
+  $\partial_n \overline{u} \geq 0$.
+\end{itemize}
+
+Como las tres condiciones de contorno son \textit{lineales} en $u$, la extensión
+no altera la demostración del principio de comparación
+(Teorema~\ref{teo:comparacion}): ésta sólo recurre al principio del máximo débil
+para el operador $L(u) = -\Delta u + M u$ (Teorema~\ref{teo:L_max_debil}), que es
+igualmente válido cuando en la frontera se imponen condiciones mixtas de Robin,
+Neumann o Dirichlet. Las dos sucesiones monótonas conservan por tanto el
+encajonamiento \eqref{eq:monotonía} y la convergencia garantizada por el
+Teorema~\ref{teo:existencia}.
+
+\subsection{Parámetros modificables del modelo}
+
+La aplicación interactiva expone cuatro parámetros que alteran la física del
+problema. La Tabla~\ref{tab:piscina_parametros} precisa el significado exacto de
+cada uno, el símbolo con el que aparece en las ecuaciones
+\eqref{eq:piscina_modelo} y \eqref{eq:piscina_cc}, y el rango dentro del cual el
+método de sub y super-soluciones está bien definido.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Parámetros modificables del modelo de la piscina y su rango de
+  validez.}\label{tab:piscina_parametros}
+  \small
+  \begin{tabular}{@{}llllp{4.0cm}@{}}
+    \toprule
+    \textbf{Parámetro} & \textbf{Símbolo} & \textbf{Rango} & \textbf{Defecto} & \textbf{Significado} \\
+    \midrule
+    Reacción (evaporación) & $\lambda$ & $\lambda \geq 0$ & $5$ & intensidad de la no
+    linealidad logística $\lambda\,u(1-u)$ \\
+    Fuente corporal & $\kappa$ & $\kappa \geq 0$ & $2$ & transferencia de calor de cada
+    persona ($\kappa_i(x) = \kappa$ en su celda) \\
+    Convección (cristalera) & $\alpha$ & $\alpha \geq 0$ & $31.5$ & coeficiente de Robin en
+    \eqref{eq:piscina_cc}; acoplamiento adimensional $\gamma = \alpha h$ \\
+    Temperatura exterior & $T_{\mathrm{ext}}$ & $T_{\min} \leq T_{\mathrm{ext}}
+    \leq T_{p}$ & $18\,^{\circ}\mathrm{C}$ & aire exterior tras la cristalera
+    ($u_{\mathrm{ext}} \in [0,1]$) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Con los valores por defecto y $h = 1/63$ (malla de $64 \times 64$ nodos), el
+acoplamiento adimensional de la cristalera vale $\gamma = \alpha h \approx 0.5$.
+
+La restricción sobre $T_{\mathrm{ext}}$ no es arbitraria. La normalización
+\eqref{eq:piscina_normalizacion} fija $T_{\min} = 10\,^{\circ}\mathrm{C}$ como la
+temperatura más fría del problema, de modo que toda temperatura normalizada
+pertenece a $[0,1]$. Si se admite $T_{\mathrm{ext}} < T_{\min}$, entonces
+$u_{\mathrm{ext}} < 0$ y el método deja de ser válido por dos motivos: (i) la
+constante $\underline{u} \equiv 0$ deja de ser sub-solución, pues en la cristalera
+se exigiría $0 \leq \alpha\,u_{\mathrm{ext}}$, que falla; y (ii) la fórmula
+discreta de Robin \eqref{eq:piscina_robin_discreta} deja de ser una media convexa
+y puede generar valores $u_b < 0$, rompiendo el encajonamiento en $[0,1]$ en el
+que se apoya la monotonía de la iteración (Teorema~\ref{teo:comparacion}). Por
+esta razón la aplicación restringe $T_{\mathrm{ext}}$ al intervalo
+$[T_{\min}, T_{p}]$.
+
 \subsection{Construcción de sub y super-soluciones}
 
 Para aplicar el Teorema~\ref{teo:comparacion} necesitamos un par ordenado de
@@ -169,7 +246,12 @@ La derivada parcial de la no linealidad respecto de $u$ es
   - \sum_{i=1}^{N_{\mathrm{pers}}} \kappa_i(x),
 \end{equation}
 cuyo módulo sobre $u \in [0,1]$ está acotado por
-$\lambda + \max_{x} \sum_i \kappa_i(x)$. Por la
+$\lambda + \max_{x} \sum_i \kappa_i(x)$. En particular, $f(x,\cdot)$ es
+Lipschitz en $u$ sobre $[0,1]$ con constante
+$L = \lambda + \max_{x} \sum_i \kappa_i(x)$
+(Definición~\ref{def:lipschitz}), y cualquier $M \geq L$ hace que
+$F(x,u) = f(x,u) + M u$ sea no decreciente en $u$, que es exactamente la
+hipótesis \eqref{eq:F_creciente} del Teorema~\ref{teo:comparacion}. Por la
 Proposición~\ref{prop:eleccionM}, el parámetro de estabilización se toma como
 \begin{equation}\label{eq:piscina_M}
   M = \lambda + \kappa\, N_{\mathrm{local}},
@@ -216,12 +298,18 @@ el tratamiento de las condiciones de contorno mixtas:
 \end{itemize}
 
 Con independencia de la condición aplicada, la matriz del sistema $A_h + M I$
-sigue siendo una \textbf{$M$-matriz} no singular: diagonalmente dominante
-estricta, con diagonal positiva y elementos extradiagonales no positivos. En
-consecuencia $(A_h + M I)^{-1} \geq 0$ y el principio del máximo discreto se
-preserva (Observación~\ref{obs:max_discreto}), lo que garantiza que las dos
-sucesiones generadas desde $\underline{u}$ y $\overline{u}$ sean monótonas,
-acotadas y converjan a la distribución real de temperaturas del edificio.
+sigue siendo una \textbf{$M$-matriz} no singular. Las filas interiores son
+diagonalmente dominantes estrictas (diagonal $4/h^{2} + M$ positiva y
+extradiagonales $-1/h^{2}$ no positivas); las filas de Robin tienen diagonal
+$1 + \gamma$ y única extradiagonal $-1$, también dominantes estrictas para
+$\gamma > 0$; y las filas de Neumann ($u_b = u_{\mathrm{int}}$) son sólo
+dominantes en sentido débil. No obstante, al ser el dominio conexo la matriz es
+\textit{irreduciblemente} diagonalmente dominante, condición suficiente para que
+sea una $M$-matriz no singular. En consecuencia $(A_h + M I)^{-1} \geq 0$ y el
+principio del máximo discreto se preserva (Observación~\ref{obs:max_discreto}),
+lo que garantiza que las dos sucesiones generadas desde $\underline{u}$ y
+$\overline{u}$ sean monótonas, acotadas y converjan a la distribución real de
+temperaturas del edificio.
 
 \subsection{Resultados numéricos y visualización interactiva}
 
@@ -250,6 +338,15 @@ generan focos locales de calor que se difunden por la sala. El decaimiento del
 \textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$ en escala
 logarítmica (Figura~\ref{fig:piscina_convergencia}) confirma la convergencia
 lineal asintótica característica del método.
+
+De acuerdo con el Teorema~\ref{teo:existencia}, las dos sucesiones convergen en
+$C^{2}$ a sendas soluciones $u_{\min}$ y $u_{\max}$ del problema mixto, con el
+encajonamiento $\underline{u} \leq u_{\min} \leq u^{*} \leq u_{\max} \leq
+\overline{u}$ (\eqref{eq:encajonamiento}). Puesto que $f$ es cóncava en $u$
+($\partial_{u}^{2} f = -2\lambda < 0$), la unicidad en el intervalo $[0,1]$ está
+sugerida (Corolario~\ref{coro:unicidad}); numéricamente ambas sucesiones
+convergen al mismo perfil de equilibrio, con el encajonamiento bilateral actuando
+como certificado de precisión.
 
 \begin{figure}[htbp]
   \centering
@@ -294,9 +391,9 @@ visualización orientada a la defensa del trabajo.
 % y en la cabecera añadir "& \textbf{Piscina 2D} \\".
 %
 % Filas a añadir (alineadas con las ya existentes):
-%   $f(u)$                              & $\lambda e^{u}$   & $\lambda u(1-u)$   & $\lambda e^{u}$ & $\lambda u(1-u) + \sum_i \kappa_i(u_{p,i}-u)$ \\
+%   $f(u)$                              & $\lambda e^{u}$   & $\lambda u(1-u)$   & $\lambda e^{u}$ & $\lambda u(1-u) + \sum_i \kappa_i(x)(u_{p,i}-u)$ \\
 %   No linealidad                       & Exponencial       & Logística          & Exponencial     & Logística + fuentes locales \\
-%   Convexidad                          & Convexa           & Cóncava            & Convexa         & Mixta (depende de $x$) \\
+%   Convexidad                          & Convexa           & Cóncava            & Convexa         & Cóncava en $u$ (depende de $x$) \\
 %   Dimensión                           & 1D                & 1D                 & 2D              & 2D \\
 %   Incógnitas                          & 100               & 100                & 2\,500          & 4\,096 \\
 %   $L$ (Lipschitz)                     & $\lambda e^{u_{\max}}$ & $\lambda$     & $\lambda e^{u_{\max}}$ & $\lambda + \kappa N_{\mathrm{local}}$ \\

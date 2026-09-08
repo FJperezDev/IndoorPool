@@ -83,7 +83,7 @@ export default function App() {
     },
     "T exterior (°C)": {
       value: params.T_ext,
-      min: -10,
+      min: 10,
       max: 37,
       step: 0.5,
       onChange: (v) => setParams({ T_ext: v }),
