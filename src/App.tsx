@@ -9,6 +9,7 @@ import {
 import { params, setParams, heaters, setHeaters } from "./math/subSuperSolver";
 import { Scene } from "./components/Scene";
 import { ConvergencePanel } from "./components/ConvergencePanel";
+import { HoverReadout } from "./components/HoverReadout";
 
 export default function App() {
   // Modo demo (p. ej. pool.franjpg.com/?demo): puerta abierta, personas
@@ -233,6 +234,7 @@ export default function App() {
       </header>
 
       <ConvergencePanel />
+      <HoverReadout />
 
       <Canvas camera={{ position: [0, 15, 20], fov: 50 }} shadows>
         <Scene />

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { useSimulationStore } from "../store/useSimulationStore";
 import {
@@ -8,6 +8,7 @@ import {
   buildPersonField,
   solverState,
   stepSimulation,
+  toCelsius,
   TURBO_LUT,
 } from "../math/subSuperSolver";
 
@@ -31,6 +32,7 @@ export const HeatMap = () => {
   const viewMode = useSimulationStore((s) => s.viewMode);
   const sweepsPerFrame = useSimulationStore((s) => s.sweepsPerFrame);
   const running = useSimulationStore((s) => s.running);
+  const setHoverInfo = useSimulationStore((s) => s.setHoverInfo);
 
   const canvas = useMemo(() => document.createElement("canvas"), []);
   const texture = useMemo(() => new THREE.CanvasTexture(canvas), [canvas]);
@@ -117,11 +119,37 @@ export const HeatMap = () => {
     texture.needsUpdate = true;
   });
 
+  // Hover: convierte el punto de impacto sobre el suelo en (i, j) de la malla
+  // y publica la temperatura de la celda para el tooltip.
+  const handlePointerMove = (e: ThreeEvent<PointerEvent>) => {
+    const { sub, super: sup } = solverState;
+    const N = GRID_SIZE;
+    const toGrid = (v: number) =>
+      Math.max(0, Math.min(N - 1, Math.round(((v + HALF_ROOM) / (2 * HALF_ROOM)) * (N - 1))));
+    const i = toGrid(e.point.x);
+    const j = toGrid(e.point.z);
+    const k = i * N + j;
+    const u =
+      viewMode === "sub" ? sub[k] : viewMode === "super" ? sup[k] : (sub[k] + sup[k]) / 2;
+    setHoverInfo({
+      u,
+      tempC: toCelsius(u),
+      x: e.point.x,
+      z: e.point.z,
+      clientX: e.nativeEvent.clientX,
+      clientY: e.nativeEvent.clientY,
+    });
+  };
+
+  const handlePointerOut = () => setHoverInfo(null);
+
   return (
     <mesh
       rotation={[-Math.PI / 2, 0, 0]}
       position={[0, 0.045, 0]}
       renderOrder={10}
+      onPointerMove={handlePointerMove}
+      onPointerOut={handlePointerOut}
     >
       <planeGeometry args={[2 * HALF_ROOM, 2 * HALF_ROOM]} />
       <meshBasicMaterial map={texture} transparent depthWrite={false} />

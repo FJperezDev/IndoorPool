@@ -70,8 +70,8 @@ temperatura se trabaja en una \textbf{variable normalizada}
   \qquad
   T_{\min} = -10\,^{\circ}\mathrm{C}, \quad T_{\max} = 40\,^{\circ}\mathrm{C},
 \end{equation}
-de modo que $u = 0$ corresponde al valor más frío admisible (el exterior en la
-puerta en invierno, $T_{\min} = -10\,^{\circ}\mathrm{C}$) y $u = 1$ a la
+de modo que $u = 0$ corresponde al valor más frío admisible del rango
+($T_{\min} = -10\,^{\circ}\mathrm{C}$, p.~ej.\ un exterior invernal) y $u = 1$ a la
 consigna máxima de los emisores de calor ($T_{\max} = 40\,^{\circ}\mathrm{C}$,
 radiador de baja temperatura). La temperatura corporal ($33$--$37\,^{\circ}$C)
 y la del agua resultan así valores interiores del intervalo, $u_{p,i} \in
@@ -151,22 +151,25 @@ donde
   con $T_{\mathrm{ext}} = 18\,^{\circ}\mathrm{C}$ de fábrica, de modo que
   $u_{\mathrm{ext}} = 0.56$;
   \item $\partial\Omega_{\mathrm{puerta}}$ es el \textbf{hueco de la puerta
-  corredera} (pared derecha, tramo de 2\,m centrado): si la puerta está abierta
-  entre el interior y el exterior, se impone una severa pérdida de calor
-  modelada como Dirichlet puro forzando la temperatura local al valor más frío
-  $u_{\mathrm{puerta}} = 0$ (esto es, $T_{\min} = -10\,^{\circ}\mathrm{C}$); si
-  está cerrada, el hueco lo ocupan las \textbf{hojas de cristal}, que transmiten
-  flujo de calor y se modelan con una condición de Robin propia de coeficiente
+  corredera} (pared derecha, tramo de 2\,m centrado): la temperatura exterior
+  es \textbf{uniforme} en todo el cerramiento, de modo que la puerta comunica
+  siempre con el mismo aire exterior que la cristalera. Si la puerta está
+  abierta se impone una pérdida de calor modelada como Dirichlet puro,
+  $u_{\mathrm{puerta}} = u_{\mathrm{ext}}$ (el mismo dato exterior que la
+  cristalera); si está cerrada, el hueco lo ocupan las \textbf{hojas de
+  cristal} (también en contacto con el aire exterior), que transmiten flujo de
+  calor y se modelan con una condición de Robin de coeficiente
   $\alpha_d > 0$ (mayor que el de la cristalera fija, pues el hueco practicable
   es la envolvente más vulnerable);
   \item $\partial\Omega_{\mathrm{aislada}}$ es el resto del cerramiento opaco,
   tratado como adiabático (condición de Neumann homogénea).
 \end{itemize}
 
-Obsérvese que la formulación unifica los dos estados de la puerta: la puerta
-abierta es el caso límite $\alpha_d \to \infty$ de la condición de Robin con
-dato exterior, sustituido aquí por el peor escenario térmico ($u = 0$,
-barrido directo con el exterior frío).
+Obsérvese que la formulación unifica los dos estados de la puerta y usa un
+único dato exterior $u_{\mathrm{ext}} = (T_{\mathrm{ext}}-T_{\min})/(T_{\max}-T_{\min})$
+para cristalera, puerta abierta y puerta cerrada: la puerta abierta es el caso
+límite $\alpha_d \to \infty$ de la condición de Robin, barrido directo con el
+mismo aire exterior.
 
 \subsection{Extensión de la definición a condiciones de contorno mixtas}
 
@@ -286,7 +289,9 @@ contorno (Definición~\ref{def:subsuper}, extendida a condiciones mixtas):
   \end{equation*}
   con igualdad cuando la sala está vacía ($N_{\mathrm{pers}} = 0$) y los
   radiadores están apagados ($N_{\mathrm{rad}} = 0$). En la
-  frontera: en la puerta abierta $\underline{u} = 0 = u_{\mathrm{puerta}}$; en la
+  frontera: en la puerta abierta $0 \leq \underline{u} \leq u_{\mathrm{puerta}}
+  = u_{\mathrm{ext}}$ (basta $0 \leq u_{\mathrm{ext}}$, garantizado por
+  $T_{\mathrm{ext}} \geq T_{\min}$); en la
   cristalera y en la puerta cerrada $0 \leq u_{\mathrm{ext}}$; y en el
   cerramiento adiabático $\partial_n \underline{u} = 0$.
 
@@ -299,7 +304,7 @@ contorno (Definición~\ref{def:subsuper}, extendida a condiciones mixtas):
   \end{equation*}
   pues $u_{p,i} \leq 1$ y $u_{r,j} \leq 1$ (de nuevo la parte positiva termostática es
   esencial: sin él la super-solución fallaría). En la frontera: en la puerta abierta
-  $\overline{u} = 1 \geq u_{\mathrm{puerta}} = 0$; en la cristalera y en la
+  $\overline{u} = 1 \geq u_{\mathrm{puerta}} = u_{\mathrm{ext}}$; en la cristalera y en la
   puerta cerrada $1 \geq u_{\mathrm{ext}}$; y en el cerramiento adiabático
   $\partial_n \overline{u} = 0$.
 \end{itemize}
@@ -307,7 +312,7 @@ contorno (Definición~\ref{def:subsuper}, extendida a condiciones mixtas):
 Ambas constantes son $C^{2}$ y están ordenadas, $\underline{u} \leq
 \overline{u}$, por lo que constituyen un par válido de sub y super-solución.
 Obsérvese que la super-solución $\overline{u} \equiv 1$ no iguala el dato de
-Dirichlet en la puerta abierta ($u_{\mathrm{puerta}} = 0$): basta con que lo
+Dirichlet en la puerta abierta ($u_{\mathrm{puerta}} = u_{\mathrm{ext}}$): basta con que lo
 acote por arriba, tal y como exige la Definición~\ref{def:subsuper}.
 
 \subsection{Parámetro de estabilización $M$}
@@ -414,7 +419,8 @@ respecto al Capítulo~\ref{cap:subsupersoluciones} reside en el tratamiento de
 las condiciones de contorno mixtas:
 
 \begin{itemize}
-  \item \textbf{Dirichlet (puerta abierta):} el valor $u_{\mathrm{puerta}} = 0$
+  \item \textbf{Dirichlet (puerta abierta):} el valor
+  $u_{\mathrm{puerta}} = u_{\mathrm{ext}} = (T_{\mathrm{ext}}-T_{\min})/(T_{\max}-T_{\min})$
   se fija en los nodos de $\partial\Omega_{\mathrm{puerta}}$; con la puerta
   cerrada ese tramo se comporta como la cristalera (Robin con $\alpha_d$), no
   como un muro adiabático.

@@ -4,6 +4,7 @@ import {
   telemetry,
   toCelsius,
   cssGradient,
+  params,
 } from "../math/subSuperSolver";
 
 const VIEW_LABELS: Record<string, string> = {
@@ -194,7 +195,9 @@ export const ConvergencePanel = () => {
         </span>
         <span style={{ opacity: 0.6 }}>Puerta</span>
         <span style={{ color: isDoorOpen ? "#ff8a6a" : "#7ad48f" }}>
-          {isDoorOpen ? "abierta (Dirichlet)" : "cerrada (Robin, cristal)"}
+          {isDoorOpen
+            ? `abierta (Dirichlet, ${params.T_ext.toFixed(1)} °C)`
+            : `cerrada (Robin, ${params.T_ext.toFixed(1)} °C)`}
         </span>
         <span style={{ opacity: 0.6 }}>Estado</span>
         <span style={{ color: running ? "#7ad48f" : "#ff8a6a" }}>

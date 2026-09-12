@@ -16,7 +16,7 @@ import type { Person } from "../store/useSimulationStore";
 //  termostático (z)⁺ = max(z,0): solo calientan por debajo de su consigna).
 //  Condiciones de contorno mixtas:
 //      cristalera (trasera):  ∂u/∂n + α u = α u_ext      (Robin)
-//      puerta (derecha):      u = u_puerta  abierta      (Dirichlet)
+//      puerta (derecha):      u = u_ext     abierta      (Dirichlet)
 //                             ∂u/∂n + α_d u = α_d u_ext  cerrada (Robin, cristal)
 //      resto del cerramiento: ∂u/n = 0                  (Neumann, adiabático)
 //
@@ -41,7 +41,7 @@ export const HALF_ROOM = 11;
 export const DOOR_HALF_WIDTH = 1;
 
 // --- Temperaturas normalizadas u ∈ [0,1] ---
-export const U_DOOR = 0; // T = T_MIN = -10 °C (puerta abierta, invierno)
+export const U_SUB0 = 0; // constante inicial de la sub-solución u ≡ 0 (no es dato de contorno)
 
 // --- Calefacción: radiadores termostáticos sobre el muro opaco izquierdo ---
 export interface HeaterConfig {
@@ -113,7 +113,7 @@ export interface SolverState {
 export const toCelsius = (u: number) => T_MIN + (T_MAX - T_MIN) * u;
 
 const createSolverState = (): SolverState => ({
-  sub: new Float64Array(GRID_SIZE * GRID_SIZE).fill(U_DOOR), // sub-solución u ≡ 0
+  sub: new Float64Array(GRID_SIZE * GRID_SIZE).fill(U_SUB0), // sub-solución u ≡ 0
   super: new Float64Array(GRID_SIZE * GRID_SIZE).fill(1), // super-solución u ≡ 1
   iteration: 0,
   maxGap: 1,
@@ -181,7 +181,7 @@ const takeSnapshot = (sig: string) => {
 };
 
 export const resetSolver = () => {
-  solverState.sub.fill(U_DOOR);
+  solverState.sub.fill(U_SUB0);
   solverState.super.fill(1);
   solverState.iteration = 0;
   solverState.maxGap = 1;
@@ -366,7 +366,7 @@ const sweep = (
   }
 
   // Pared derecha (i = N-1): puerta corredera de cristal.
-  //  - abierta:   Dirichlet u = u_puerta (barrido directo con el exterior)
+  //  - abierta:   Dirichlet u = u_ext (mismo aire exterior que la cristalera)
   //  - cerrada:   Robin con su propio coeficiente alphaDoor (el cristal
   //               transmite flujo de calor; no es adiabática)
   //  - resto del muro opaco: Neumann homogénea (adiabática)
@@ -375,7 +375,7 @@ const sweep = (
     const interior = grid[(N - 2) * N + j];
     if (j >= doorLo && j <= doorHi) {
       if (doorOpen) {
-        grid[idx] = U_DOOR;
+        grid[idx] = uExt;
       } else {
         grid[idx] = (interior + gammaDoor * uExt) / (1 + gammaDoor);
       }

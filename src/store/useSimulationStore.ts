@@ -11,6 +11,15 @@ export type ViewMode = "sub" | "super" | "gap" | "solution" | "sources";
 
 export type DoorMode = "auto" | "open" | "closed";
 
+export interface HoverInfo {
+  u: number;      // valor normalizado en la celda
+  tempC: number;  // temperatura en °C
+  x: number;      // posición del cursor sobre el suelo (m)
+  z: number;
+  clientX: number; // posición de pantalla para el tooltip
+  clientY: number;
+}
+
 export interface Person {
   id: number;
   x: number;
@@ -32,6 +41,7 @@ interface SimState {
   running: boolean;
   targetIteration: number;
   scenarioVersion: number;
+  hoverInfo: HoverInfo | null;
   addPerson: () => void;
   removePerson: () => void;
   fillCapacity: () => void;
@@ -43,6 +53,7 @@ interface SimState {
   setDoorMode: (m: DoorMode) => void;
   setRunning: (v: boolean) => void;
   setTargetIteration: (n: number) => void;
+  setHoverInfo: (h: HoverInfo | null) => void;
   stepBy: (delta: number) => void;
   refresh: () => void;
   resetSimulation: () => void;
@@ -73,6 +84,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   running: true,
   targetIteration: 0,
   scenarioVersion: 0,
+  hoverInfo: null,
 
   addPerson: () => {
     const { persons, maxCapacity } = get();
@@ -192,6 +204,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
     if (get().isDoorOpen !== doorBefore) get().refresh();
   },
 
+  setHoverInfo: (hoverInfo) => set({ hoverInfo }),
   setViewMode: (viewMode) => set({ viewMode }),
   setSweepsPerFrame: (sweepsPerFrame) => set({ sweepsPerFrame }),
   setDoorMode: (doorMode) => {
