@@ -1,5 +1,6 @@
 import { useSimulationStore } from "../../store/useSimulationStore";
 import { AutomaticDoor } from "./AutomaticDoor";
+import { Radiators } from "./Radiators";
 
 const BuildingShell = () => {
   const isTransparent = useSimulationStore((s) => s.buildingTransparent);
@@ -66,6 +67,9 @@ export const Building = () => {
     <group>
       {/* ENVOLVENTE */}
       <BuildingShell />
+
+      {/* Radiadores en el muro izquierdo */}
+      <Radiators />
 
       {/* Puerta desplazada para encajar en el nuevo muro */}
       <group position={[0.25, 0, 0]}>

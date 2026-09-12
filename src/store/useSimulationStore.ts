@@ -7,7 +7,7 @@ import {
 
 export type ActionStatus = "entering" | "wandering" | "swimming" | "exiting";
 
-export type ViewMode = "sub" | "super" | "gap" | "solution";
+export type ViewMode = "sub" | "super" | "gap" | "solution" | "sources";
 
 export type DoorMode = "auto" | "open" | "closed";
 
@@ -31,6 +31,7 @@ interface SimState {
   buildingTransparent: boolean;
   running: boolean;
   targetIteration: number;
+  scenarioVersion: number;
   addPerson: () => void;
   removePerson: () => void;
   fillCapacity: () => void;
@@ -71,6 +72,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   buildingTransparent: true,
   running: true,
   targetIteration: 0,
+  scenarioVersion: 0,
 
   addPerson: () => {
     const { persons, maxCapacity } = get();
@@ -217,6 +219,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   },
   refresh: () => {
     const { running, persons, isDoorOpen, targetIteration } = get();
+    set({ scenarioVersion: get().scenarioVersion + 1 });
     if (!running) {
       gotoIteration(persons, isDoorOpen, targetIteration);
     } else {

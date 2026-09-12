@@ -5,17 +5,20 @@ import type { Person } from "../store/useSimulationStore";
 //
 //  La temperatura se trabaja NORMALIZADA, u ∈ [0,1]:
 //      u = (T - T_MIN) / (T_MAX - T_MIN)
-//  con T_MIN = 10 °C (exterior en la puerta) y T_MAX = 37 °C (cuerpo humano).
-//  En esta escala la no linealidad logística λ u (1-u) está bien definida.
+//  con T_MIN = -10 °C (exterior invernal peor caso, puerta abierta) y
+//  T_MAX = 40 °C (consigna máxima de los radiadores). En esta escala la
+//  no linealidad logística λ u (1-u) está bien definida y las constantes
+//  u ≡ 0 y u ≡ 1 son sub y super-solución válidas para TODO escenario.
 //
 //  Ecuación interior:
-//      -Δu = λ u (1-u) + Σ_i κ_i(x) (u_{p,i} - u)
-//  donde u_{p,i} es la temperatura corporal normalizada de la persona i.
+//      -Δu = λ u (1-u) + Σ_i κ_i(x) (u_{p,i} - u) + Σ_j ρ_j(x) (u_{r,j} - u)⁺
+//  (personas como sumideros/fuentes lineales; radiadores con clamp
+//  termostático (z)⁺ = max(z,0): solo calientan por debajo de su consigna).
 //  Condiciones de contorno mixtas:
 //      cristalera (trasera):  ∂u/∂n + α u = α u_ext      (Robin)
 //      puerta (derecha):      u = u_puerta  abierta      (Dirichlet)
 //                             ∂u/∂n + α_d u = α_d u_ext  cerrada (Robin, cristal)
-//      resto del cerramiento: ∂u/∂n = 0                  (Neumann, adiabático)
+//      resto del cerramiento: ∂u/n = 0                  (Neumann, adiabático)
 //
 //  Iteración monótona (esquema de punto fijo):
 //      (A_h + M I) u^{k+1} = f(u^k) + M u^k,   M ≥ sup|∂f/∂u|
@@ -27,8 +30,8 @@ import type { Person } from "../store/useSimulationStore";
 export const GRID_SIZE = 64;
 
 // --- Temperaturas físicas (°C) ---
-const T_MIN = 10; // exterior en la puerta (escenario más frío)
-const T_MAX = 37; // temperatura corporal T_p
+const T_MIN = -10; // exterior invernal peor caso (puerta abierta)
+const T_MAX = 40; // consigna máxima del radiador (límite superior normalizado)
 
 // --- Semilado de la sala (m): el dominio del solver coincide con las
 //     caras interiores del cerramiento dibujado en Building.tsx [-11, 11]² ---
@@ -38,7 +41,29 @@ export const HALF_ROOM = 11;
 export const DOOR_HALF_WIDTH = 1;
 
 // --- Temperaturas normalizadas u ∈ [0,1] ---
-export const U_DOOR = 0; // T = T_MIN = 10 °C (puerta abierta)
+export const U_DOOR = 0; // T = T_MIN = -10 °C (puerta abierta, invierno)
+
+// --- Calefacción: radiadores termostáticos sobre el muro opaco izquierdo ---
+export interface HeaterConfig {
+  enabled: boolean;
+  tempC: number; // consigna del radiador (°C), ≤ T_MAX para no romper ū ≡ 1
+  power: number; // ρ total por radiador (se reparte entre sus celdas)
+}
+
+export const heaters: HeaterConfig = { enabled: true, tempC: 40, power: 9 };
+
+export const setHeaters = (h: Partial<HeaterConfig>) => {
+  Object.assign(heaters, h);
+};
+
+// Radiadores por defecto: 4 sobre el muro izquierdo (x ≈ -10.5), cada uno
+// cubre 3 celdas de muro alrededor de su centro z.
+export const RADIATORS: { x: number; z: number; cells: number }[] = [
+  { x: -10.5, z: -7.0, cells: 3 },
+  { x: -10.5, z: -2.5, cells: 3 },
+  { x: -10.5, z: 2.5, cells: 3 },
+  { x: -10.5, z: 7.0, cells: 3 },
+];
 
 // --- Parámetros del modelo (editables desde la interfaz) ---
 export interface SimParams {
@@ -127,6 +152,9 @@ const scenarioSig = (persons: Person[], doorOpen: boolean) =>
     params.alphaDoor,
     params.T_ext,
     doorOpen,
+    heaters.enabled,
+    heaters.tempC,
+    heaters.power,
     persons
       .map(
         (p) =>
@@ -178,52 +206,66 @@ export const telemetry = {
   maxGap: 1,
   supSub: 0,
   infSuper: 1,
-  M: params.lambda, // parámetro de estabilización M = λ + κ·N_local
+  M: params.lambda, // M = λ + máx_celda(Σκ + Σρ); se fija tras el 1er paso
   gapViolation: false, // true si en algún nodo ū < u (encajonamiento roto)
   history: [] as { iter: number; gap: number }[],
 };
 
 // ---------------------------------------------------------------------------
-//  Campo de fuentes corporales. Cada persona i aporta, en su celda ocupada, el
-//  término κ_i(x) (u_{p,i} - u), donde u_{p,i} es su temperatura corporal
-//  normalizada. Se separan dos campos:
-//    · weight[idx] = Σ_i κ_i(x)         (peso total, para la cota de M)
-//    · source[idx] = Σ_i κ_i(x) u_{p,i} (calor efectivo aportado)
+//  Campos de fuentes. Dos mecanismos separados (el del radiador lleva clamp
+//  termostático, el de las personas es lineal):
+//    · weight/source: Σ_i κ_i(x) y Σ_i κ_i(x) u_{p,i}   (personas, lineal)
+//    · weightR/sourceR: Σ_j ρ_j(x) y Σ_j ρ_j(x) u_{r,j} (radiadores, clamp)
+//  En el barrido:  f = λu(1-u) + (src - wgt·u) + max(srcR - wgtR·u, 0).
 // ---------------------------------------------------------------------------
 export interface PersonField {
   weight: Float64Array;
   source: Float64Array;
+  weightR: Float64Array;
+  sourceR: Float64Array;
 }
 
 export const normalizeCelsius = (t: number) => (t - T_MIN) / (T_MAX - T_MIN);
 
-// El campo de fuentes sólo depende de `persons` y de `params.kappa`; se cachea
-// y se reutilizan los buffers para no asignar ~32 KB por frame (evita picos de
-// GC durante la animación). Se invalida automáticamente al cambiar la lista de
-// personas (referencia) o el coeficiente κ.
+// El campo sólo depende de `persons`, `params.kappa` y `heaters`; se cachea y
+// se reutilizan los buffers para no asignar ~64 KB por frame (evita picos de
+// GC durante la animación).
 let fieldCache: {
   personsRef: Person[];
   kappa: number;
+  enabled: boolean;
+  tempC: number;
+  power: number;
   field: PersonField;
-  maxWeight: number;
+  maxWeight: number; // máx_x (Σκ + Σρ): cota del término Lipschitz de las fuentes
 } | null = null;
 
 export const buildPersonField = (persons: Person[]): PersonField => {
   const hit =
     fieldCache &&
     fieldCache.personsRef === persons &&
-    fieldCache.kappa === params.kappa
+    fieldCache.kappa === params.kappa &&
+    fieldCache.enabled === heaters.enabled &&
+    fieldCache.tempC === heaters.tempC &&
+    fieldCache.power === heaters.power
       ? fieldCache
       : null;
   if (hit) return hit.field;
 
   const size = GRID_SIZE * GRID_SIZE;
-  const weight = fieldCache ? fieldCache.field.weight : new Float64Array(size);
-  const source = fieldCache ? fieldCache.field.source : new Float64Array(size);
+  const mk = (old?: Float64Array) => old ?? new Float64Array(size);
+  const prev = fieldCache ? fieldCache.field : null;
+  const weight = mk(prev?.weight);
+  const source = mk(prev?.source);
+  const weightR = mk(prev?.weightR);
+  const sourceR = mk(prev?.sourceR);
   weight.fill(0);
   source.fill(0);
+  weightR.fill(0);
+  sourceR.fill(0);
 
-  let maxWeight = 0;
+  const maxWeightArr = new Float64Array(size); // (Σκ+Σρ) por celda, para M
+
   persons.forEach((p) => {
     const i = worldToGrid(p.x);
     const j = worldToGrid(p.z);
@@ -232,12 +274,41 @@ export const buildPersonField = (persons: Person[]): PersonField => {
       const up = normalizeCelsius(p.temp);
       weight[idx] += params.kappa;
       source[idx] += params.kappa * up;
-      if (weight[idx] > maxWeight) maxWeight = weight[idx];
+      maxWeightArr[idx] += params.kappa;
     }
   });
 
-  const field = { weight, source };
-  fieldCache = { personsRef: persons, kappa: params.kappa, field, maxWeight };
+  if (heaters.enabled) {
+    const ur = Math.min(normalizeCelsius(heaters.tempC), 1); // u_r ≤ 1: ū ≡ 1 válida
+    for (const r of RADIATORS) {
+      const i = worldToGrid(r.x);
+      const j0 = worldToGrid(r.z);
+      const per = heaters.power / r.cells; // ρ repartido entre sus celdas
+      for (let dj = 0; dj < r.cells; dj++) {
+        const jj = j0 - ((r.cells - 1) >> 1) + dj;
+        if (i >= 1 && i < GRID_SIZE - 1 && jj >= 1 && jj < GRID_SIZE - 1) {
+          const idx = i * GRID_SIZE + jj;
+          weightR[idx] += per;
+          sourceR[idx] += per * ur;
+          maxWeightArr[idx] += per;
+        }
+      }
+    }
+  }
+
+  let maxWeight = 0;
+  for (let k = 0; k < size; k++) if (maxWeightArr[k] > maxWeight) maxWeight = maxWeightArr[k];
+
+  const field = { weight, source, weightR, sourceR };
+  fieldCache = {
+    personsRef: persons,
+    kappa: params.kappa,
+    enabled: heaters.enabled,
+    tempC: heaters.tempC,
+    power: heaters.power,
+    field,
+    maxWeight,
+  };
   return field;
 };
 
@@ -259,13 +330,17 @@ const sweep = (
   const lambda = params.lambda;
   const src = field.source;
   const wgt = field.weight;
+  const srcR = field.sourceR;
+  const wgtR = field.weightR;
 
   // Nodos interiores (plantilla de cinco puntos)
   for (let j = 1; j < N - 1; j++) {
     for (let i = 1; i < N - 1; i++) {
       const idx = i * N + j;
       const u = grid[idx];
-      const f = lambda * u * (1 - u) + (src[idx] - wgt[idx] * u);
+      const hr = srcR[idx] - wgtR[idx] * u; // radiador con termostato (z)⁺
+      const f =
+        lambda * u * (1 - u) + (src[idx] - wgt[idx] * u) + (hr > 0 ? hr : 0);
       const sum =
         grid[(i - 1) * N + j] +
         grid[(i + 1) * N + j] +
@@ -354,7 +429,7 @@ const recordHistory = () => {
 
 const buildFieldAndM = (persons: Person[]) => {
   const field = buildPersonField(persons);
-  // M = λ + κ·N_local ≥ sup |∂f/∂u| (cota de Lipschitz de f en u sobre [0,1])
+  // M = λ + máx_celda(Σκ + Σρ) ≥ sup |∂f/∂u| (cota Lipschitz de f en u sobre [0,1])
   const M = params.lambda + (fieldCache?.maxWeight ?? 0);
   return { field, M };
 };

@@ -5,6 +5,7 @@ import { useSimulationStore } from "../store/useSimulationStore";
 import {
   GRID_SIZE,
   HALF_ROOM,
+  buildPersonField,
   solverState,
   stepSimulation,
   TURBO_LUT,
@@ -19,6 +20,10 @@ const H = GRID_SIZE;
 
 const ALPHA_VIEW = 200;
 const GAP_ALPHA_SCALE = 700;
+const SRC_ALPHA_SCALE = 230;
+
+// Scratch para la vista "Fuentes q(x)" (potencia instantánea por celda)
+const qScratch = new Float64Array(GRID_SIZE * GRID_SIZE);
 
 export const HeatMap = () => {
   const persons = useSimulationStore((s) => s.persons);
@@ -55,7 +60,31 @@ export const HeatMap = () => {
     // j ↔ Z mundo; un ImageData indexa py*N + px con px ↔ X e py ↔ Z (v=1 en
     // la fila superior del canvas, que tras rotation -PI/2 corresponde a
     // Z minimo = cristalera). Por tanto: o = (j*N + i) * 4, valor = grid[i*N+j].
-    if (viewMode === "gap") {
+    if (viewMode === "sources") {
+      // q(x) = Σκᵢ(u_{p,i}−u)⁺ + Σρⱼ(u_{r,j}−u)⁺ evaluado en la solución
+      // actual (u ≈ (u_k + ū_k)/2): focos térmicos activos que se "apagan"
+      // al converger al equilibrio.
+      const fld = buildPersonField(persons);
+      let qMax = 1e-12;
+      for (let k = 0; k < N * N; k++) {
+        const u = (sub[k] + sup[k]) / 2;
+        const hp = fld.source[k] - fld.weight[k] * u;
+        const hr = fld.sourceR[k] - fld.weightR[k] * u;
+        const q = (hp > 0 ? hp : 0) + (hr > 0 ? hr : 0);
+        qScratch[k] = q;
+        if (q > qMax) qMax = q;
+      }
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < N; j++) {
+          const qn = qScratch[i * N + j] / qMax;
+          const o = (j * N + i) * 4;
+          data[o] = 255;
+          data[o + 1] = Math.round(90 * (1 - qn));
+          data[o + 2] = Math.round(40 * (1 - qn));
+          data[o + 3] = Math.round(SRC_ALPHA_SCALE * Math.min(1, qn * 3));
+        }
+      }
+    } else if (viewMode === "gap") {
       for (let i = 0; i < N; i++) {
         for (let j = 0; j < N; j++) {
           const k = i * N + j;

@@ -6,7 +6,7 @@ import {
   ViewMode,
   DoorMode,
 } from "./store/useSimulationStore";
-import { params, setParams } from "./math/subSuperSolver";
+import { params, setParams, heaters, setHeaters } from "./math/subSuperSolver";
 import { Scene } from "./components/Scene";
 import { ConvergencePanel } from "./components/ConvergencePanel";
 
@@ -54,6 +54,7 @@ export default function App() {
         "Sub-solución (u)": "sub",
         "Super-solución (ū)": "super",
         "Envolvente (ū − u)": "gap",
+        "Fuentes q(x)": "sources",
       },
       onChange: (v) => setViewMode(v as ViewMode),
     },
@@ -109,11 +110,41 @@ export default function App() {
     },
     "T exterior (°C)": {
       value: params.T_ext,
-      min: 10,
-      max: 37,
+      min: -10,
+      max: 40,
       step: 0.5,
       onChange: (v) => {
         setParams({ T_ext: v });
+        refresh();
+      },
+    },
+  });
+
+  useControls("Calefacción", {
+    Radiadores: {
+      value: heaters.enabled,
+      onChange: (v) => {
+        setHeaters({ enabled: v });
+        refresh();
+      },
+    },
+    "T consigna (°C)": {
+      value: heaters.tempC,
+      min: 15,
+      max: 40,
+      step: 0.5,
+      onChange: (v) => {
+        setHeaters({ tempC: v });
+        refresh();
+      },
+    },
+    "ρ (potencia)": {
+      value: heaters.power,
+      min: 0,
+      max: 30,
+      step: 1,
+      onChange: (v) => {
+        setHeaters({ power: v });
         refresh();
       },
     },
@@ -174,6 +205,9 @@ export default function App() {
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#101216" }}>
       {!isDemo && <Leva theme={{ sizes: { rootWidth: "360px" } }} />}
+      {isDemo && (
+        <style>{`#leva__root{display:none!important}`}</style>
+      )}
 
       <header
         style={{
@@ -194,7 +228,7 @@ export default function App() {
           Simulador TFG · Método de Sub y Super-Soluciones
         </h1>
         <p style={{ margin: "2px 0 0", opacity: 0.8, fontSize: 12 }}>
-          Climatización de una piscina cubierta · −Δu = λu(1−u) + Σ κᵢ(uₚ,ᵢ−u)
+          Climatización de una piscina cubierta · −Δu = λu(1−u) + Σ κᵢ(x)(uₚ,ᵢ−u) + Σ ρⱼ(x)(uᵣ,ⱼ−u)⁺
         </p>
       </header>
 

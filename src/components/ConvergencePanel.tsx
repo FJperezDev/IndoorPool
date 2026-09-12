@@ -1,11 +1,16 @@
 import { useEffect, useRef } from "react";
 import { useSimulationStore } from "../store/useSimulationStore";
-import { telemetry, toCelsius, cssGradient } from "../math/subSuperSolver";
+import {
+  telemetry,
+  toCelsius,
+  cssGradient,
+} from "../math/subSuperSolver";
 
 const VIEW_LABELS: Record<string, string> = {
   sub: "Sub-solución (u)",
   super: "Super-solución (ū)",
   gap: "Envolvente (ū − u)",
+  sources: "Fuentes q(x)",
   solution: "Solución (u*)",
 };
 
@@ -202,7 +207,7 @@ export const ConvergencePanel = () => {
         style={{ width: "100%", height: 140, display: "block", borderRadius: 4 }}
       />
 
-      {viewMode !== "gap" && (
+      {viewMode !== "gap" && viewMode !== "sources" && (
         <div style={{ marginTop: 10 }}>
           <div
             style={{
@@ -221,9 +226,9 @@ export const ConvergencePanel = () => {
               marginTop: 3,
             }}
           >
-            <span>10 °C</span>
-            <span>23.5 °C</span>
-            <span>37 °C</span>
+            <span>{toCelsius(0).toFixed(0)} °C</span>
+            <span>{toCelsius(0.5).toFixed(0)} °C</span>
+            <span>{toCelsius(1).toFixed(0)} °C</span>
           </div>
         </div>
       )}

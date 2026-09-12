@@ -28,7 +28,8 @@
 %  aplicación 3D interactiva):
 %    * piscina_sub_super.png   : sub-solución, super-solución y solución.
 %    * piscina_convergencia.png: decaimiento del gap (escala logarítmica).
-%    * piscina_app.png         : captura de la aplicación 3D interactiva.
+%    * piscina_app.png         : captura de la aplicación 3D interactiva
+%      (con radiadores sobre el muro izquierdo y panel de convergencia).
 % ============================================================================
 
 \section{Ejemplo 4: Climatización de una Piscina Cubierta (2D con Condiciones de Contorno Mixtas)}
@@ -57,33 +58,40 @@ puerta, puerta de cristal cerrada y cerramiento opaco), lo que conduce a un
 problema con \textbf{condiciones de contorno mixtas}. El interés del ejemplo es
 doble: por un lado, muestra que la iteración monótona se adapta sin dificultad
 a problemas que no son de Dirichlet puro; por otro, el término no lineal acopla
-dos mecanismos físicos de naturaleza distinta (saturación por evaporación y
-fuentes de calor corporales), lo que enriquece la estructura de $f(x,u)$.
+tres mecanismos físicos de naturaleza distinta (saturación por evaporación,
+fuentes de calor corporales y calefacción termostática), lo que enriquece la
+estructura de $f(x,u)$.
 
 El dominio $\Omega \subset \mathbb{R}^2$ representa la planta de la instalación
 (sala rectangular de $22 \times 22$\,m con el vaso de piscina centrado). La
 temperatura se trabaja en una \textbf{variable normalizada}
 \begin{equation}\label{eq:piscina_normalizacion}
-  u(x) = \frac{T(x) - T_{\min}}{T_{p} - T_{\min}} \in [0,1],
+  u(x) = \frac{T(x) - T_{\min}}{T_{\max} - T_{\min}} \in [0,1],
   \qquad
-  T_{\min} = 10\,^{\circ}\mathrm{C}, \quad T_{p} = 37\,^{\circ}\mathrm{C},
+  T_{\min} = -10\,^{\circ}\mathrm{C}, \quad T_{\max} = 40\,^{\circ}\mathrm{C},
 \end{equation}
-de modo que $u = 0$ corresponde al valor más frío (el exterior en la puerta,
-$T_{\min} = 10\,^{\circ}\mathrm{C}$) y $u = 1$ a la temperatura corporal
-$T_{p} \approx 37\,^{\circ}\mathrm{C}$. Esta normalización es la que permite que
-la no linealidad logística $u(1-u)$ esté bien definida sobre el intervalo
-$[0,1]$.
+de modo que $u = 0$ corresponde al valor más frío admisible (el exterior en la
+puerta en invierno, $T_{\min} = -10\,^{\circ}\mathrm{C}$) y $u = 1$ a la
+consigna máxima de los emisores de calor ($T_{\max} = 40\,^{\circ}\mathrm{C}$,
+radiador de baja temperatura). La temperatura corporal ($33$--$37\,^{\circ}$C)
+y la del agua resultan así valores interiores del intervalo, $u_{p,i} \in
+[0.86, 0.94]$. Esta normalización es la que permite que la no linealidad
+logística $u(1-u)$ esté bien definida sobre $[0,1]$, y garantiza que las
+constantes $u \equiv 0$ y $u \equiv 1$ sean siempre sub y super-solución
+(véase más abajo).
 
 La distribución estacionaria de temperatura se rige por la ecuación de
 reacción--difusión
 \begin{equation}\label{eq:piscina_modelo}
   -\Delta u(x) = \lambda\, u(x)\bigl(1 - u(x)\bigr)
-  + \sum_{i=1}^{N_{\mathrm{pers}}} \kappa_i(x)\,\bigl(u_{p,i} - u(x)\bigr),
+  + \sum_{i=1}^{N_{\mathrm{pers}}} \kappa_i(x)\,\bigl(u_{p,i} - u(x)\bigr)
+  + \sum_{j=1}^{N_{\mathrm{rad}}} \rho_j(x)\,
+    \bigl(u_{r,j} - u(x)\bigr)^{+},
   \qquad x \in \Omega,
 \end{equation}
-donde $\lambda > 0$ y $N_{\mathrm{pers}}$ es el número de personas presentes en
-la sala. El término no lineal $f(x,u)$ acopla dos mecanismos termodinámicos
-locales:
+donde $\lambda > 0$, $N_{\mathrm{pers}}$ es el número de personas y
+$N_{\mathrm{rad}}$ el de radiadores, y $(z)^{+} = \max\{z,0\}$. El término no
+lineal $f(x,u)$ acopla así tres mecanismos termodinámicos locales:
 
 \begin{itemize}
   \item \textbf{Saturación por evaporación:} el agua transfiere calor al
@@ -104,7 +112,18 @@ locales:
   ocupada por el individuo $i$, y $\kappa_i(x) = 0$ en otro caso. Nótese que este
   término desaparece cuando la temperatura ambiente iguala la corporal del
   individuo ($u = u_{p,i}$).
-\end{itemize}
+
+  \item \textbf{Calefacción termostática (radiadores):} cada radiador $j$ es una
+  fuente local de consigna normalizada $u_{r,j} \in [0,1]$ (típicamente
+  $u_{r,j} \le 1$, pues la consigna no supera $T_{\max} = 40\,^{\circ}$C) y
+  entrega calor proporcionalmente al gradiente $u_{r,j} - u(x)$ \emph{solo
+  mientras} el ambiente esté por debajo de la consigna, lo que se modela con la
+  parte positiva $(\cdot)^{+}$. La función indicadora $\rho_j(x)$ concentra la
+  potencia sobre las celdas del muro ocupadas por el radiador. El término se
+  anula (el radiador ``se apaga'') cuando $u(x) \ge u_{r,j}$, de modo que el
+  emisor mantiene la temperatura sin sobrecalentar la estancia; disponer dos
+  radiadores sobre la misma celda suma sus potencias sin alterar la estructura
+  del modelo.
 
 \subsection{Condiciones de contorno mixtas}
 
@@ -128,14 +147,14 @@ donde
   \item $\partial\Omega_{\mathrm{cristal}}$ es la \textbf{cristalera} (pared
   trasera): condición de Robin (tercer tipo) que modela la convección térmica
   proporcional a la diferencia con el exterior. Aquí
-  $u_{\mathrm{ext}} = (T_{\mathrm{ext}} - T_{\min})/(T_{p} - T_{\min})$
+  $u_{\mathrm{ext}} = (T_{\mathrm{ext}} - T_{\min})/(T_{\max} - T_{\min})$
   con $T_{\mathrm{ext}} = 18\,^{\circ}\mathrm{C}$ de fábrica, de modo que
-  $u_{\mathrm{ext}} \approx 0.30$;
+  $u_{\mathrm{ext}} = 0.56$;
   \item $\partial\Omega_{\mathrm{puerta}}$ es el \textbf{hueco de la puerta
   corredera} (pared derecha, tramo de 2\,m centrado): si la puerta está abierta
   entre el interior y el exterior, se impone una severa pérdida de calor
   modelada como Dirichlet puro forzando la temperatura local al valor más frío
-  $u_{\mathrm{puerta}} = 0$ (esto es, $T_{\min} = 10\,^{\circ}\mathrm{C}$); si
+  $u_{\mathrm{puerta}} = 0$ (esto es, $T_{\min} = -10\,^{\circ}\mathrm{C}$); si
   está cerrada, el hueco lo ocupan las \textbf{hojas de cristal}, que transmiten
   flujo de calor y se modelan con una condición de Robin propia de coeficiente
   $\alpha_d > 0$ (mayor que el de la cristalera fija, pues el hueco practicable
@@ -186,7 +205,7 @@ Teorema~\ref{teo:existencia}.
 
 \subsection{Parámetros modificables del modelo}
 
-La aplicación interactiva expone cinco parámetros que alteran la física del
+La aplicación interactiva expone siete parámetros que alteran la física del
 problema. La Tabla~\ref{tab:piscina_parametros} precisa el significado exacto de
 cada uno, el símbolo con el que aparece en las ecuaciones
 \eqref{eq:piscina_modelo} y \eqref{eq:piscina_cc}, y el rango dentro del cual el
@@ -209,8 +228,13 @@ método de sub y super-soluciones está bien definido.
     \eqref{eq:piscina_cc}; acoplamiento adimensional $\gamma = \alpha h$ \\
     Convección (puerta de cristal) & $\alpha_d$ & $\alpha_d \geq 0$ & $40$ & coeficiente de
     Robin del hueco de puerta cuando la puerta está cerrada \\
+    Radiadores (potencia) & $\rho$ & $\rho \geq 0$ & $9$ & potencia total de cada
+    radiador, repartida entre sus celdas ($\rho_j(x) = \rho/n_{\mathrm{celdas}}$) \\
+    Radiadores (consigna) & $u_{r,j}$ & $u_{r,j} \leq 1$ & $40\,^{\circ}\mathrm{C}$ &
+    temperatura de consigna del emisor; $\le T_{\max}$ para que
+    $\overline{u} \equiv 1$ siga siendo super-solución \\
     Temperatura exterior & $T_{\mathrm{ext}}$ & $T_{\min} \leq T_{\mathrm{ext}}
-    \leq T_{p}$ & $18\,^{\circ}\mathrm{C}$ & aire exterior tras la cristalera y la
+    \leq T_{\max}$ & $18\,^{\circ}\mathrm{C}$ & aire exterior tras la cristalera y la
     puerta ($u_{\mathrm{ext}} \in [0,1]$) \\
     \bottomrule
   \end{tabular}
@@ -219,11 +243,12 @@ método de sub y super-soluciones está bien definido.
 Con los valores por defecto y $h = 1/63$ (malla de $64 \times 64$ nodos sobre la
 planta cuadrada normalizada), el acoplamiento adimensional de la cristalera vale
 $\gamma = \alpha h \approx 0.5$ y el de la puerta $\gamma_d = \alpha_d h
-\approx 0.63$.
+\approx 0.63$. Los radiadores se sitúan sobre el muro opaco izquierdo (el único
+sin ventanas), repartidos en cuatro emisores de baja temperatura.
 
 La restricción sobre $T_{\mathrm{ext}}$ no es arbitraria. La normalización
-\eqref{eq:piscina_normalizacion} fija $T_{\min} = 10\,^{\circ}\mathrm{C}$ como la
-temperatura más fría del problema, de modo que toda temperatura normalizada
+\eqref{eq:piscina_normalizacion} fija $T_{\min} = -10\,^{\circ}\mathrm{C}$ como la
+temperatura más fría admisible, de modo que toda temperatura normalizada
 pertenece a $[0,1]$. Si se admite $T_{\mathrm{ext}} < T_{\min}$, entonces
 $u_{\mathrm{ext}} < 0$ y el método deja de ser válido por dos motivos: (i) la
 constante $\underline{u} \equiv 0$ deja de ser sub-solución, pues en la
@@ -232,7 +257,13 @@ fórmula discreta de Robin \eqref{eq:piscina_robin_discreta} deja de ser una med
 convexa y puede generar valores $u_b < 0$, rompiendo el encajonamiento en $[0,1]$
 en el que se apoya la monotonía de la iteración (Teorema~\ref{teo:comparacion}).
 Por esta razón la aplicación restringe $T_{\mathrm{ext}}$ al intervalo
-$[T_{\min}, T_{p}]$. De modo análogo, cualquier cambio de escenario (aforo,
+$[T_{\min}, T_{\max}]$. Análogamente, la consigna de los radiadores se limita a
+$u_{r,j} \le 1$: si se admitiera $u_{r,j} > 1$ el término $(\cdot)^{+}$ sería
+estrictamente positivo en $u = 1$ y $\overline{u} \equiv 1$ dejaría de ser
+super-solución (el radiador seguiría inyectando calor por encima de toda la
+escala). Con la cota $u_{r,j} \le 1$ se tiene
+$\sum_j \rho_j(x)(u_{r,j} - 1)^{+} = 0$ y el argumento de la super-solución se
+mantiene intacto. De modo análogo, cualquier cambio de escenario (aforo,
 parámetros o estado de la puerta) reinicia las dos sucesiones en los extremos
 constantes $\underline{u} \equiv 0$ y $\overline{u} \equiv 1$, que son sub y
 super-solución válidos para \textbf{todo} escenario admisible y garantizan el
@@ -250,9 +281,11 @@ contorno (Definición~\ref{def:subsuper}, extendida a condiciones mixtas):
   frío posible (piscina vacía, puerta abierta). En el interior,
   \begin{equation*}
     -\Delta \underline{u} = 0 \leq f(x, 0) = \lambda \cdot 0 \cdot 1
-    + \sum_{i} \kappa_i(x)\, u_{p,i},
+    + \sum_{i} \kappa_i(x)\, u_{p,i}
+    + \sum_{j} \rho_j(x)\, u_{r,j},
   \end{equation*}
-  con igualdad cuando la sala está vacía ($N_{\mathrm{pers}} = 0$). En la
+  con igualdad cuando la sala está vacía ($N_{\mathrm{pers}} = 0$) y los
+  radiadores están apagados ($N_{\mathrm{rad}} = 0$). En la
   frontera: en la puerta abierta $\underline{u} = 0 = u_{\mathrm{puerta}}$; en la
   cristalera y en la puerta cerrada $0 \leq u_{\mathrm{ext}}$; y en el
   cerramiento adiabático $\partial_n \underline{u} = 0$.
@@ -261,9 +294,11 @@ contorno (Definición~\ref{def:subsuper}, extendida a condiciones mixtas):
   superior (aforo completo, cerramiento total). En el interior,
   \begin{equation*}
     -\Delta \overline{u} = 0 \geq f(x, 1) = \lambda \cdot 1 \cdot 0
-    + \sum_{i} \kappa_i(x)\,(u_{p,i} - 1),
+    + \sum_{i} \kappa_i(x)\,(u_{p,i} - 1)
+    + \sum_{j} \rho_j(x)\,(u_{r,j} - 1)^{+},
   \end{equation*}
-  pues $u_{p,i} \leq 1$. En la frontera: en la puerta abierta
+  pues $u_{p,i} \leq 1$ y $u_{r,j} \leq 1$ (de nuevo la parte positiva termostática es
+  esencial: sin él la super-solución fallaría). En la frontera: en la puerta abierta
   $\overline{u} = 1 \geq u_{\mathrm{puerta}} = 0$; en la cristalera y en la
   puerta cerrada $1 \geq u_{\mathrm{ext}}$; y en el cerramiento adiabático
   $\partial_n \overline{u} = 0$.
@@ -280,23 +315,25 @@ acote por arriba, tal y como exige la Definición~\ref{def:subsuper}.
 La derivada parcial de la no linealidad respecto de $u$ es
 \begin{equation}\label{eq:piscina_derivada}
   \frac{\partial f}{\partial u}(x,u) = \lambda\bigl(1 - 2u\bigr)
-  - \sum_{i=1}^{N_{\mathrm{pers}}} \kappa_i(x),
+  - \sum_{i=1}^{N_{\mathrm{pers}}} \kappa_i(x)
+  - \sum_{j=1}^{N_{\mathrm{rad}}} \rho_j(x)\,
+    \mathbf{1}_{\{u < u_{r,j}\}}(x),
 \end{equation}
 cuyo módulo sobre $u \in [0,1]$ está acotado por
-$\lambda + \max_{x} \sum_i \kappa_i(x)$. En particular, $f(x,\cdot)$ es
-Lipschitz en $u$ sobre $[0,1]$ con constante
-$L = \lambda + \max_{x} \sum_i \kappa_i(x)$
+$\lambda + \max_{x}\bigl(\sum_i \kappa_i(x) + \sum_j \rho_j(x)\bigr)$. En
+particular, $f(x,\cdot)$ es Lipschitz en $u$ sobre $[0,1]$ con constante
+$L = \lambda + \max_{x}\bigl(\sum_i \kappa_i(x) + \sum_j \rho_j(x)\bigr)$
 (Definición~\ref{def:lipschitz}), y cualquier $M \geq L$ hace que
 $F(x,u) = f(x,u) + M u$ sea no decreciente en $u$, que es exactamente la
 hipótesis \eqref{eq:F_creciente} del Teorema~\ref{teo:comparacion}. Por la
 Proposición~\ref{prop:eleccionM}, el parámetro de estabilización se toma como
 \begin{equation}\label{eq:piscina_M}
-  M = \lambda + \kappa\, N_{\mathrm{local}},
+  M = \lambda + \max_{x}\Bigl(\sum_i \kappa_i(x) + \sum_j \rho_j(x)\Bigr),
 \end{equation}
-donde $N_{\mathrm{local}} = \max_{x} \sum_i \mathbf{1}_{\{\kappa_i(x)>0\}}$ es
-el máximo número de personas que comparten una misma celda de la malla. En la
-práctica $N_{\mathrm{local}} = 1$ (las personas rara vez ocupan la misma celda),
-por lo que con $\lambda = 5$ y $\kappa = 2$ resulta $M = 7$. A diferencia del
+es decir, el máximo por celda del peso total de las fuentes (personas y
+radiadores). En la práctica la celda más cargada es una celda de radiador, con
+$\rho/n_{\mathrm{celdas}} = 3$ para $\rho = 9$ y tres celdas por emisor, de modo
+que con $\lambda = 5$ resulta $M = 8$. A diferencia del
 modelo de Frank-Kamenetskii, $M$ queda ajustado a la constante de Lipschitz
 efectiva, lo que favorece una convergencia rápida.
 
@@ -335,8 +372,10 @@ monotonía del método:
       + F(x, u_{\mathrm{old}})}{4/h^{2} + M},
   \end{equation}
   con $F(x,u) = f(x,u) + M u$ \textbf{no decreciente} en $u$ (elección de $M$,
-  Proposición~\ref{prop:eleccionM}), y es creciente respecto de los valores
-  vecinos ya actualizados en el mismo barrido. La conclusión se propaga nodo a
+  Proposición~\ref{prop:eleccionM}); la parte positiva termostática $(\cdot)^{+}$ es no
+  creciente en $u$, de modo que no compromete esa monotonía. Además,
+  \eqref{eq:piscina_gs} es creciente respecto de los valores vecinos ya
+  actualizados en el mismo barrido. La conclusión se propaga nodo a
   nodo a lo largo del recorrido lexicográfico (inducción sobre el orden del
   barrido). Es aquí donde interviene la propiedad de $M$-matriz de $A_h + MI$:
   los coeficientes fuera de la diagonal son negativos, de modo que los vecinos
@@ -345,9 +384,10 @@ monotonía del método:
   constantes en el de Dirichlet) preservan también el orden.
   \item \textbf{Los extremos son puntos fijos ordenados por $T$:} el vector
   nulo cumple $T(\mathbf{0}) \geq \mathbf{0}$ (pues $F(x,0) = f(x,0) \geq 0$, al ser
-  $f(x,0) = \sum_i \kappa_i(x)\,u_{p,i} \geq 0$) y el vector unidad cumple $T(\mathbf{1}) \leq
+  $f(x,0) = \sum_i \kappa_i(x)\,u_{p,i} + \sum_j \rho_j(x)\,u_{r,j} \geq 0$) y el
+  vector unidad cumple $T(\mathbf{1}) \leq
   \mathbf{1}$ (pues $F(x,1) = f(x,1) + M \leq M$, al ser
-  $f(x,1) = \sum_i \kappa_i(x)(u_{p,i} - 1) \leq 0$, y las filas de contorno
+  $f(x,1) = \sum_i \kappa_i(x)(u_{p,i} - 1) + \sum_j \rho_j(x)(u_{r,j}-1)^{+} \leq 0$, y las filas de contorno
   (Robin y Neumann) son medias convexas o copias de valores en $[0,1]$).
   \item De las dos propiedades anteriores sigue, por inducción, la cadena de
   orden $\mathbf{0} \leq T(\mathbf{0}) \leq \cdots \leq T^{k}(\mathbf{1}) \leq
@@ -428,15 +468,17 @@ $\underline{u} \leq u_1 \leq \cdots \leq u^{*} \leq \cdots \leq \overline{u}_1
   iterada partiendo de $\bar{u} \equiv 1$); ya se insinúan la banda templada de
   la cristalera (Robin) y el frente frío de la puerta (Dirichlet). \textbf{
   Abajo:} solución de equilibrio $u^{*}$ con las fuentes corporales (personas
-  marcadas con círculos) y su contorno frío en la puerta, y encajonamiento
+  marcadas con círculos) y los radiadores (cuadrados), su contorno frío en la
+  puerta y la banda cálida del muro izquierdo, y encajonamiento
   $\bar{u}^{(k)} - u^{(k)}$ fotografiado en la iteración 200, cuando el
   certificado bilateral aún es ancho lejos de la puerta.}
   \label{fig:piscina_sub_super}
 \end{figure}
 
-El perfil de equilibrio resultante refleja los dos mecanismos del modelo: un
-frente frío que penetra desde la puerta abierta (condición de Dirichlet) y una
-capa templada junto a la cristalera (condición de Robin), mientras las personas
+El perfil de equilibrio resultante refleja los tres mecanismos del modelo: un
+frente frío que penetra desde la puerta abierta (condición de Dirichlet), una
+capa templada junto a la cristalera (condición de Robin) y una banda cálida
+sobre el muro opaco izquierdo aportada por los radiadores, mientras las personas
 generan focos locales de calor que se difunden por la sala. El decaimiento del
 \textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$ en escala
 logarítmica (Figura~\ref{fig:piscina_convergencia}) confirma la convergencia
@@ -457,11 +499,14 @@ como certificado de precisión.
   \caption{Decaimiento del error en escala logarítmica para el modelo de la
   piscina (réplica del esquema de la aplicación: diferencias finitas con
   relajación Gauss-Seidel, malla $64 \times 64$, $\lambda = 5$, $\kappa = 2$,
-  $M = 7$). El \textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$
+  $\rho = 9$, $M = 8$, puerta abierta y tres personas). El \textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$
   entre ambas sucesiones decrece de forma lineal en escala semilogarítmica
   (recta: convergencia lineal asintótica), alcanzando $10^{-8}$ tras unas
-  $37\,600$ barridos: cada uno cuesta $O(4096)$ operaciones, lo que permite a
-  la aplicación mantener la animación en tiempo real.}
+  $29\,000$ barridos: cada uno cuesta $O(4096)$ operaciones, lo que permite a
+  la aplicación mantener la animación en tiempo real. La réplica incluye los
+  cuatro radiadores sobre el muro izquierdo (marcados en la figura de
+  equilibrio), de modo que reproduce el mismo escenario que la aplicación
+  interactiva.}
   \label{fig:piscina_convergencia}
 \end{figure}
 
@@ -470,7 +515,11 @@ A diferencia de los ejemplos 1D, este modelo cuenta con una \textbf{aplicación
 Raspberry Pi~5) que permite añadir o retirar personas en tiempo real y observar
 cómo ambas sucesiones se reajustan hacia el nuevo equilibrio, así como alternar
 la visualización entre la sub-solución, la super-solución, el \textit{gap}
-$\overline{u} - \underline{u}$ y la solución de equilibrio. La
+$\overline{u} - \underline{u}$, la solución de equilibrio y un mapa de las
+\textbf{fuentes térmicas} $q(x) = \sum_i \kappa_i(u_{p,i}-u)^{+} +
+\sum_j \rho_j(u_{r,j}-u)^{+}$, que muestra en cada instante dónde está
+inyectando calor cada emisor y cómo se \"apagan\" al alcanzar el equilibrio
+(la parte positiva termostática). La
 Figura~\ref{fig:piscina_app} muestra una captura de dicha aplicación, que
 complementa la validación numérica con una visualización orientada a la defensa
 del trabajo.
