@@ -13,8 +13,9 @@ import type { Person } from "../store/useSimulationStore";
 //  donde u_{p,i} es la temperatura corporal normalizada de la persona i.
 //  Condiciones de contorno mixtas:
 //      cristalera (trasera):  ∂u/∂n + α u = α u_ext      (Robin)
-//      puerta (derecha):      u = u_puerta                (Dirichlet, si abre)
-//      resto del cerramiento: ∂u/∂n = 0                   (Neumann, adiabático)
+//      puerta (derecha):      u = u_puerta  abierta      (Dirichlet)
+//                             ∂u/∂n + α_d u = α_d u_ext  cerrada (Robin, cristal)
+//      resto del cerramiento: ∂u/∂n = 0                  (Neumann, adiabático)
 //
 //  Iteración monótona (esquema de punto fijo):
 //      (A_h + M I) u^{k+1} = f(u^k) + M u^k,   M ≥ sup|∂f/∂u|
@@ -29,6 +30,13 @@ export const GRID_SIZE = 64;
 const T_MIN = 10; // exterior en la puerta (escenario más frío)
 const T_MAX = 37; // temperatura corporal T_p
 
+// --- Semilado de la sala (m): el dominio del solver coincide con las
+//     caras interiores del cerramiento dibujado en Building.tsx [-11, 11]² ---
+export const HALF_ROOM = 11;
+
+// --- Semiancho del hueco de puerta (m): coincide con el hueco visual ---
+export const DOOR_HALF_WIDTH = 1;
+
 // --- Temperaturas normalizadas u ∈ [0,1] ---
 export const U_DOOR = 0; // T = T_MIN = 10 °C (puerta abierta)
 
@@ -36,7 +44,8 @@ export const U_DOOR = 0; // T = T_MIN = 10 °C (puerta abierta)
 export interface SimParams {
   lambda: number; // intensidad de la reacción logística (saturación)
   kappa: number; // coeficiente de transferencia corporal por persona
-  alpha: number; // coeficiente convectivo Robin (γ = α·h)
+  alpha: number; // coeficiente convectivo Robin de la cristalera (γ = α·h)
+  alphaDoor: number; // coeficiente convectivo Robin de la puerta de cristal
   T_ext: number; // temperatura exterior tras las cristaleras (°C)
 }
 
@@ -44,6 +53,7 @@ export const params: SimParams = {
   lambda: 5.0,
   kappa: 2.0,
   alpha: 31.5, // γ = α·h ≈ 0.5 con h = 1/63 (valor original del modelo)
+  alphaDoor: 40, // puerta corredera de cristal: algo más convectiva que el fijo
   T_ext: 18,
 };
 
@@ -51,10 +61,13 @@ export const setParams = (p: Partial<SimParams>) => {
   Object.assign(params, p);
 };
 
-// Tramos de la puerta en la pared derecha (x = +10). En coordenadas de malla,
-// la puerta ocupa z ∈ [-2, 2] → j ∈ [doorLo, doorHi].
-const doorLo = Math.round(0.4 * (GRID_SIZE - 1));
-const doorHi = Math.round(0.6 * (GRID_SIZE - 1));
+// Tramos de la puerta en la pared derecha (x = +HALF_ROOM). En coordenadas de
+// malla, la puerta ocupa z ∈ [-DOOR_HALF_WIDTH, DOOR_HALF_WIDTH].
+const worldToGrid = (v: number) =>
+  Math.round(((v + HALF_ROOM) / (2 * HALF_ROOM)) * (GRID_SIZE - 1));
+
+const doorLo = worldToGrid(-DOOR_HALF_WIDTH);
+const doorHi = worldToGrid(DOOR_HALF_WIDTH);
 
 const h = 1 / (GRID_SIZE - 1);
 const h2 = h * h;
@@ -64,8 +77,8 @@ const NB = 1 / h2; // coeficiente fuera de la diagonal
 //  Estado del solver (dos sucesiones monótonas simultáneas)
 // ---------------------------------------------------------------------------
 export interface SolverState {
-  sub: Float32Array; // sucesión inferior  u_k (creciente)
-  super: Float32Array; // sucesión superior ū_k (decreciente)
+  sub: Float64Array; // sucesión inferior  u_k (creciente)
+  super: Float64Array; // sucesión superior ū_k (decreciente)
   iteration: number;
   maxGap: number; // ‖ū - u‖_∞  (medida de convergencia)
   supSub: number; // sup u_k (para mostrar el "techo" inferior)
@@ -75,8 +88,8 @@ export interface SolverState {
 export const toCelsius = (u: number) => T_MIN + (T_MAX - T_MIN) * u;
 
 const createSolverState = (): SolverState => ({
-  sub: new Float32Array(GRID_SIZE * GRID_SIZE).fill(U_DOOR), // sub-solución u ≡ 0
-  super: new Float32Array(GRID_SIZE * GRID_SIZE).fill(1), // super-solución u ≡ 1
+  sub: new Float64Array(GRID_SIZE * GRID_SIZE).fill(U_DOOR), // sub-solución u ≡ 0
+  super: new Float64Array(GRID_SIZE * GRID_SIZE).fill(1), // super-solución u ≡ 1
   iteration: 0,
   maxGap: 1,
   supSub: 0,
@@ -84,6 +97,60 @@ const createSolverState = (): SolverState => ({
 });
 
 export const solverState: SolverState = createSolverState();
+
+// ---------------------------------------------------------------------------
+//  Snapshots de estado para navegación eficiente entre iteraciones: se guarda
+//  un par (sub, super) cada SNAP_EVERY iteraciones, de modo que gotoIteration
+//  sólo reconstruye como máximo SNAP_EVERY barridos desde el snapshot más
+//  cercano (evita reconstruir desde 0 y congelar la Raspberry Pi).
+// ---------------------------------------------------------------------------
+const SNAP_EVERY = 250;
+const MAX_SNAPS = 80;
+
+interface Snap {
+  iter: number;
+  sub: Float64Array;
+  sup: Float64Array;
+  histLen: number;
+}
+
+let snapshots: Snap[] = [];
+let snapSig = "";
+
+// Firma del escenario: dos snapshots sólo son compatibles si el escenario
+// (parámetros, personas y estado de puerta) es idéntico.
+const scenarioSig = (persons: Person[], doorOpen: boolean) =>
+  [
+    params.lambda,
+    params.kappa,
+    params.alpha,
+    params.alphaDoor,
+    params.T_ext,
+    doorOpen,
+    persons
+      .map(
+        (p) =>
+          `${p.id}:${p.x.toFixed(2)},${p.z.toFixed(2)},${p.temp.toFixed(1)}`,
+      )
+      .join(";"),
+  ].join("|");
+
+const takeSnapshot = (sig: string) => {
+  if (sig !== snapSig) {
+    snapshots = [];
+    snapSig = sig;
+  }
+  snapshots.push({
+    iter: solverState.iteration,
+    sub: solverState.sub.slice(),
+    sup: solverState.super.slice(),
+    histLen: telemetry.history.length,
+  });
+  if (snapshots.length > MAX_SNAPS) {
+    // conservar sólo la mitad más reciente, intercalada, para no perder rango
+    snapshots = snapshots.filter((_, idx) => idx % 2 === 1);
+  }
+};
 
 export const resetSolver = () => {
   solverState.sub.fill(U_DOOR);
@@ -97,6 +164,7 @@ export const resetSolver = () => {
   telemetry.supSub = 0;
   telemetry.infSuper = 1;
   telemetry.history.length = 0;
+  snapshots = [];
 };
 
 // ---------------------------------------------------------------------------
@@ -111,6 +179,7 @@ export const telemetry = {
   supSub: 0,
   infSuper: 1,
   M: params.lambda, // parámetro de estabilización M = λ + κ·N_local
+  gapViolation: false, // true si en algún nodo ū < u (encajonamiento roto)
   history: [] as { iter: number; gap: number }[],
 };
 
@@ -122,8 +191,8 @@ export const telemetry = {
 //    · source[idx] = Σ_i κ_i(x) u_{p,i} (calor efectivo aportado)
 // ---------------------------------------------------------------------------
 export interface PersonField {
-  weight: Float32Array;
-  source: Float32Array;
+  weight: Float64Array;
+  source: Float64Array;
 }
 
 export const normalizeCelsius = (t: number) => (t - T_MIN) / (T_MAX - T_MIN);
@@ -149,15 +218,15 @@ export const buildPersonField = (persons: Person[]): PersonField => {
   if (hit) return hit.field;
 
   const size = GRID_SIZE * GRID_SIZE;
-  const weight = fieldCache ? fieldCache.field.weight : new Float32Array(size);
-  const source = fieldCache ? fieldCache.field.source : new Float32Array(size);
+  const weight = fieldCache ? fieldCache.field.weight : new Float64Array(size);
+  const source = fieldCache ? fieldCache.field.source : new Float64Array(size);
   weight.fill(0);
   source.fill(0);
 
   let maxWeight = 0;
   persons.forEach((p) => {
-    const i = Math.round(((p.x + 10) / 20) * (GRID_SIZE - 1));
-    const j = Math.round(((p.z + 10) / 20) * (GRID_SIZE - 1));
+    const i = worldToGrid(p.x);
+    const j = worldToGrid(p.z);
     if (i >= 1 && i < GRID_SIZE - 1 && j >= 1 && j < GRID_SIZE - 1) {
       const idx = i * GRID_SIZE + j;
       const up = normalizeCelsius(p.temp);
@@ -177,14 +246,15 @@ export const buildPersonField = (persons: Person[]): PersonField => {
 //  (relajación del esquema de punto fijo monótono).
 // ---------------------------------------------------------------------------
 const sweep = (
-  grid: Float32Array,
+  grid: Float64Array,
   field: PersonField,
   M: number,
   doorOpen: boolean,
 ) => {
   const N = GRID_SIZE;
   const center = 4 * NB + M;
-  const gamma = params.alpha * h; // γ = α·h (acoplamiento Robin adimensional)
+  const gamma = params.alpha * h; // γ = α·h (acoplamiento Robin cristalera)
+  const gammaDoor = params.alphaDoor * h; // acoplamiento Robin puerta de cristal
   const uExt = normalizeCelsius(params.T_ext);
   const lambda = params.lambda;
   const src = field.source;
@@ -220,13 +290,22 @@ const sweep = (
     grid[j] = grid[N + j];
   }
 
-  // Pared derecha (i = N-1): puerta (Dirichlet si abierta, Neumann si cerrada)
+  // Pared derecha (i = N-1): puerta corredera de cristal.
+  //  - abierta:   Dirichlet u = u_puerta (barrido directo con el exterior)
+  //  - cerrada:   Robin con su propio coeficiente alphaDoor (el cristal
+  //               transmite flujo de calor; no es adiabática)
+  //  - resto del muro opaco: Neumann homogénea (adiabática)
   for (let j = 1; j < N - 1; j++) {
     const idx = (N - 1) * N + j;
-    if (doorOpen && j >= doorLo && j <= doorHi) {
-      grid[idx] = U_DOOR;
+    const interior = grid[(N - 2) * N + j];
+    if (j >= doorLo && j <= doorHi) {
+      if (doorOpen) {
+        grid[idx] = U_DOOR;
+      } else {
+        grid[idx] = (interior + gammaDoor * uExt) / (1 + gammaDoor);
+      }
     } else {
-      grid[idx] = grid[(N - 2) * N + j];
+      grid[idx] = interior;
     }
   }
 
@@ -245,9 +324,11 @@ const computeMetrics = () => {
   let gap = 0;
   let supSub = -Infinity;
   let infSuper = Infinity;
+  let violation = false;
   for (let k = 0; k < solverState.sub.length; k++) {
     const d = solverState.super[k] - solverState.sub[k];
     if (d > gap) gap = d;
+    if (d < -1e-4) violation = true; // ū < u: se rompió el encajonamiento
     if (solverState.sub[k] > supSub) supSub = solverState.sub[k];
     if (solverState.super[k] < infSuper) infSuper = solverState.super[k];
   }
@@ -258,6 +339,7 @@ const computeMetrics = () => {
   telemetry.maxGap = gap;
   telemetry.supSub = supSub;
   telemetry.infSuper = infSuper;
+  telemetry.gapViolation = violation;
 };
 
 const recordHistory = () => {
@@ -272,20 +354,36 @@ const recordHistory = () => {
 
 const buildFieldAndM = (persons: Person[]) => {
   const field = buildPersonField(persons);
-  // M = λ + κ·N_local ≥ sup |∂f/∂u|
+  // M = λ + κ·N_local ≥ sup |∂f/∂u| (cota de Lipschitz de f en u sobre [0,1])
   const M = params.lambda + (fieldCache?.maxWeight ?? 0);
   return { field, M };
 };
 
-const advanceSweep = (field: PersonField, M: number, doorOpen: boolean) => {
+// Una iteración = un barrido de cada sucesión (sub y super). Cada
+// HISTORY_STRIDE iteraciones se registran métricas e histórico, y cada
+// SNAP_EVERY se toma un snapshot para la navegación posterior. El registro
+// depende sólo de la iteración, no del número de barridos por frame.
+const advanceSweep = (
+  field: PersonField,
+  M: number,
+  doorOpen: boolean,
+  sig: string,
+) => {
   sweep(solverState.sub, field, M, doorOpen);
   sweep(solverState.super, field, M, doorOpen);
   solverState.iteration++;
+  if (solverState.iteration % HISTORY_STRIDE === 0) {
+    computeMetrics();
+    recordHistory();
+  }
+  if (solverState.iteration % SNAP_EVERY === 0) {
+    takeSnapshot(sig);
+  }
 };
 
 // ---------------------------------------------------------------------------
-//  Avance del solver: `sweeps` pasadas por frame, actualizando AMBAS sucesiones
-//  y la telemetría de convergencia.
+//  Avance del solver: `sweeps` iteraciones por frame, actualizando AMBAS
+//  sucesiones y la telemetría de convergencia.
 // ---------------------------------------------------------------------------
 export const stepSimulation = (
   persons: Person[],
@@ -293,18 +391,19 @@ export const stepSimulation = (
   sweeps: number,
 ) => {
   const { field, M } = buildFieldAndM(persons);
+  const sig = scenarioSig(persons, doorOpen);
 
-  for (let s = 0; s < sweeps; s++) advanceSweep(field, M, doorOpen);
+  for (let s = 0; s < sweeps; s++) advanceSweep(field, M, doorOpen, sig);
 
   computeMetrics();
   telemetry.M = M;
-  recordHistory();
 };
 
 // ---------------------------------------------------------------------------
-//  Navegación manual: reconstruye AMBAS sucesiones desde el estado inicial
-//  (u ≡ 0 y ū ≡ 1) hasta la iteración `targetIteration`, reconstruyendo también
-//  el historial de convergencia hasta ese punto.
+//  Navegación manual: restaura el último snapshot anterior a `targetIteration`
+//  (mismo escenario) y completa con barridos hasta el objetivo. En el peor
+//  caso (sin snapshot compatible) reconstruye desde el estado inicial, como
+//  antes; en el habitual cuesta como máximo SNAP_EVERY iteraciones.
 // ---------------------------------------------------------------------------
 export const gotoIteration = (
   persons: Person[],
@@ -313,16 +412,26 @@ export const gotoIteration = (
 ) => {
   const n = Math.max(0, Math.floor(targetIteration));
   const { field, M } = buildFieldAndM(persons);
+  const sig = scenarioSig(persons, doorOpen);
 
-  resetSolver();
-
-  for (let s = 0; s < n; s++) {
-    advanceSweep(field, M, doorOpen);
-    if (solverState.iteration % HISTORY_STRIDE === 0) {
-      computeMetrics();
-      recordHistory();
+  let restored = false;
+  if (sig === snapSig && snapshots.length > 0) {
+    for (let k = snapshots.length - 1; k >= 0; k--) {
+      if (snapshots[k].iter <= n) {
+        const snap = snapshots[k];
+        solverState.sub.set(snap.sub);
+        solverState.super.set(snap.sup);
+        solverState.iteration = snap.iter;
+        if (telemetry.history.length > snap.histLen)
+          telemetry.history.length = snap.histLen;
+        restored = true;
+        break;
+      }
     }
   }
+  if (!restored) resetSolver();
+
+  while (solverState.iteration < n) advanceSweep(field, M, doorOpen, sig);
 
   computeMetrics();
   telemetry.M = M;

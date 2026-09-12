@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+tfg.pdf
+fragmento.tex
+docker-compose*.yml
+Dockerfile*

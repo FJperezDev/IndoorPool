@@ -119,6 +119,22 @@ export const ConvergencePanel = () => {
       ctx.font = "11px monospace";
       ctx.fillText(`iteración ${telemetry.iteration}`, 12, 22);
       ctx.fillText(`M = ${telemetry.M.toFixed(2)}`, 12, 38);
+      // Cotas leídas del telemetry en el propio bucle rAF: se mantienen vivas
+      // al navegar por iteraciones en pausa (sin re-renders de React).
+      ctx.fillText(
+        `cotas ${toCelsius(telemetry.supSub).toFixed(1)} – ${toCelsius(
+          telemetry.infSuper,
+        ).toFixed(1)} °C`,
+        12,
+        54,
+      );
+      if (telemetry.maxGap < 1e-6) {
+        ctx.fillStyle = "#7ad48f";
+        ctx.fillText("convergido: u ≤ u* ≤ ū certificado", 12, 70);
+      } else if (telemetry.gapViolation) {
+        ctx.fillStyle = "#ff5a5a";
+        ctx.fillText("! encajonamiento roto (reinicia)", 12, 70);
+      }
 
       raf = requestAnimationFrame(draw);
     };
@@ -173,12 +189,8 @@ export const ConvergencePanel = () => {
         </span>
         <span style={{ opacity: 0.6 }}>Puerta</span>
         <span style={{ color: isDoorOpen ? "#ff8a6a" : "#7ad48f" }}>
-          {isDoorOpen ? "abierta (Dirichlet)" : "cerrada (adiabática)"}
+          {isDoorOpen ? "abierta (Dirichlet)" : "cerrada (Robin, cristal)"}
         </span>
-        <span style={{ opacity: 0.6 }}>Cot. inferior</span>
-        <span>{toCelsius(telemetry.supSub).toFixed(1)} °C</span>
-        <span style={{ opacity: 0.6 }}>Cot. superior</span>
-        <span>{toCelsius(telemetry.infSuper).toFixed(1)} °C</span>
         <span style={{ opacity: 0.6 }}>Estado</span>
         <span style={{ color: running ? "#7ad48f" : "#ff8a6a" }}>
           {running ? "reproduciendo" : "pausado (navegar)"}
@@ -190,29 +202,31 @@ export const ConvergencePanel = () => {
         style={{ width: "100%", height: 140, display: "block", borderRadius: 4 }}
       />
 
-      <div style={{ marginTop: 10 }}>
-        <div
-          style={{
-            width: "100%",
-            height: 12,
-            borderRadius: 3,
-            background: cssGradient(),
-          }}
-        />
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            fontSize: 10,
-            color: "rgba(255,255,255,0.7)",
-            marginTop: 3,
-          }}
-        >
-          <span>10 °C</span>
-          <span>23.5 °C</span>
-          <span>37 °C</span>
+      {viewMode !== "gap" && (
+        <div style={{ marginTop: 10 }}>
+          <div
+            style={{
+              width: "100%",
+              height: 12,
+              borderRadius: 3,
+              background: cssGradient(),
+            }}
+          />
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontSize: 10,
+              color: "rgba(255,255,255,0.7)",
+              marginTop: 3,
+            }}
+          >
+            <span>10 °C</span>
+            <span>23.5 °C</span>
+            <span>37 °C</span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

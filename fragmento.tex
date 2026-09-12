@@ -24,7 +24,8 @@
 %  Tabla~\ref{tab:contraste} añadiendo una cuarta columna (se propone el
 %  bloque al final de este archivo, comentado).
 %
-%  FIGURAS NECESARIAS (capturas de la aplicación 3D interactiva):
+%  FIGURAS NECESARIAS (generadas con code/main_piscina.py y capturas de la
+%  aplicación 3D interactiva):
 %    * piscina_sub_super.png   : sub-solución, super-solución y solución.
 %    * piscina_convergencia.png: decaimiento del gap (escala logarítmica).
 %    * piscina_app.png         : captura de la aplicación 3D interactiva.
@@ -36,20 +37,32 @@
 \subsection{Contexto y formulación}
 
 Este último ejemplo traslada el método a un escenario físico concreto: la
-\textbf{distribución estacionaria de temperatura en una piscina cubierta}. A
-diferencia de los ejemplos anteriores, aquí la frontera $\partial\Omega$ no
-admite un único tipo de condición de contorno, sino que se descompone en
-tres tramos con comportamientos termodinámicos distintos (envolvente acristalada,
-hueco de puerta y cerramiento opaco), lo que conduce a un problema con
-\textbf{condiciones de contorno mixtas}. El interés del ejemplo es doble: por un
-lado, muestra que la iteración monótona se adapta sin dificultad a problemas
-que no son de Dirichlet puro; por otro, el término no lineal acopla dos
-mecanismos físicos de naturaleza distinta (saturación por evaporación y fuentes
-de calor corporales), lo que enriquece la estructura de $f(x,u)$.
+\textbf{distribución estacionaria de temperatura en el suelo de una piscina
+cubierta}, a ras del agua. Insistimos en que se trata de un \textbf{problema
+elíptico en estado estabilizado}: la incógnita es el perfil de temperatura de
+equilibrio, determinada por las condiciones de contorno del cerramiento y las
+fuentes internas. No se modela la evolución temporal de la temperatura (un
+problema parabólico $\partial_t u - \Delta u = f$), que quedaría fuera del
+alcance de este trabajo y se menciona únicamente como línea futura. En
+consecuencia, la animación de la aplicación interactiva que acompaña al ejemplo
+\textbf{no representa el paso del tiempo}: muestra las iteraciones sucesivas
+del esquema monótono de sub y super-soluciones aproximando la solución
+estacionaria, exactamente igual que los paneles de convergencia de los
+ejemplos anteriores.
+
+A diferencia de los ejemplos previos, aquí la frontera $\partial\Omega$ no
+admite un único tipo de condición de contorno, sino que se descompone en tramos
+con comportamientos termodinámicos distintos (envolvente acristalada, hueco de
+puerta, puerta de cristal cerrada y cerramiento opaco), lo que conduce a un
+problema con \textbf{condiciones de contorno mixtas}. El interés del ejemplo es
+doble: por un lado, muestra que la iteración monótona se adapta sin dificultad
+a problemas que no son de Dirichlet puro; por otro, el término no lineal acopla
+dos mecanismos físicos de naturaleza distinta (saturación por evaporación y
+fuentes de calor corporales), lo que enriquece la estructura de $f(x,u)$.
 
 El dominio $\Omega \subset \mathbb{R}^2$ representa la planta de la instalación
-(una sala rectangular con un vaso de piscina centrado). La temperatura se
-trabaja en una \textbf{variable normalizada}
+(sala rectangular de $22 \times 22$\,m con el vaso de piscina centrado). La
+temperatura se trabaja en una \textbf{variable normalizada}
 \begin{equation}\label{eq:piscina_normalizacion}
   u(x) = \frac{T(x) - T_{\min}}{T_{p} - T_{\min}} \in [0,1],
   \qquad
@@ -95,15 +108,17 @@ locales:
 
 \subsection{Condiciones de contorno mixtas}
 
-La frontera $\partial\Omega$ se divide en tres tramos según el comportamiento
-físico de las envolventes del edificio (Figura~\ref{fig:piscina_app}):
-
+La frontera $\partial\Omega$ se descompone en cuatro tramos según el
+comportamiento físico de las envolventes del edificio
+(Figura~\ref{fig:piscina_app}):
 \begin{equation}\label{eq:piscina_cc}
   \begin{cases}
-    \dfrac{\partial u}{\partial n} + \alpha(x)\, u = \alpha(x)\, u_{\mathrm{ext}},
+    \dfrac{\partial u}{\partial n} + \alpha\, u = \alpha\, u_{\mathrm{ext}},
       & x \in \partial\Omega_{\mathrm{cristal}}, \\[8pt]
     u(x) = u_{\mathrm{puerta}},
-      & x \in \partial\Omega_{\mathrm{puerta}}, \\[8pt]
+      & x \in \partial\Omega_{\mathrm{puerta}} \ \text{(puerta abierta)}, \\[6pt]
+    \dfrac{\partial u}{\partial n} + \alpha_d\, u = \alpha_d\, u_{\mathrm{ext}},
+      & x \in \partial\Omega_{\mathrm{puerta}} \ \text{(puerta cerrada)}, \\[6pt]
     \dfrac{\partial u}{\partial n} = 0,
       & x \in \partial\Omega_{\mathrm{aislada}},
   \end{cases}
@@ -114,15 +129,25 @@ donde
   trasera): condición de Robin (tercer tipo) que modela la convección térmica
   proporcional a la diferencia con el exterior. Aquí
   $u_{\mathrm{ext}} = (T_{\mathrm{ext}} - T_{\min})/(T_{p} - T_{\min})$
-  con $T_{\mathrm{ext}} = 18\,^{\circ}\mathrm{C}$, de modo que
+  con $T_{\mathrm{ext}} = 18\,^{\circ}\mathrm{C}$ de fábrica, de modo que
   $u_{\mathrm{ext}} \approx 0.30$;
-  \item $\partial\Omega_{\mathrm{puerta}}$ es el \textbf{hueco de la puerta}
-  automática: condición de Dirichlet pura que impone una severa pérdida de calor
-  cuando la puerta se abre, forzando la temperatura local al valor exterior
-  $u_{\mathrm{puerta}} = 0$ (esto es, $T_{\min} = 10\,^{\circ}\mathrm{C}$);
+  \item $\partial\Omega_{\mathrm{puerta}}$ es el \textbf{hueco de la puerta
+  corredera} (pared derecha, tramo de 2\,m centrado): si la puerta está abierta
+  entre el interior y el exterior, se impone una severa pérdida de calor
+  modelada como Dirichlet puro forzando la temperatura local al valor más frío
+  $u_{\mathrm{puerta}} = 0$ (esto es, $T_{\min} = 10\,^{\circ}\mathrm{C}$); si
+  está cerrada, el hueco lo ocupan las \textbf{hojas de cristal}, que transmiten
+  flujo de calor y se modelan con una condición de Robin propia de coeficiente
+  $\alpha_d > 0$ (mayor que el de la cristalera fija, pues el hueco practicable
+  es la envolvente más vulnerable);
   \item $\partial\Omega_{\mathrm{aislada}}$ es el resto del cerramiento opaco,
   tratado como adiabático (condición de Neumann homogénea).
 \end{itemize}
+
+Obsérvese que la formulación unifica los dos estados de la puerta: la puerta
+abierta es el caso límite $\alpha_d \to \infty$ de la condición de Robin con
+dato exterior, sustituido aquí por el peor escenario térmico ($u = 0$,
+barrido directo con el exterior frío).
 
 \subsection{Extensión de la definición a condiciones de contorno mixtas}
 
@@ -134,30 +159,34 @@ correspondiente al tipo de condición impuesto en ese tramo:
 
 \begin{itemize}
   \item \textbf{Sub-solución:} $-\Delta \underline{u} \leq f(x,\underline{u})$ en
-  $\Omega$; en la puerta $\underline{u} \leq u_{\mathrm{puerta}}$; en la
-  cristalera $\partial_n \underline{u} + \alpha\,\underline{u} \leq
-  \alpha\,u_{\mathrm{ext}}$; y en el cerramiento adiabático
+  $\Omega$; en la puerta abierta $\underline{u} \leq u_{\mathrm{puerta}}$; en la
+  cristalera y en la puerta cerrada
+  $\partial_n \underline{u} + \alpha\,\underline{u} \leq \alpha\,u_{\mathrm{ext}}$
+  (análogamente con $\alpha_d$); y en el cerramiento adiabático
   $\partial_n \underline{u} \leq 0$.
 
   \item \textbf{Super-solución:} $-\Delta \overline{u} \geq f(x,\overline{u})$ en
-  $\Omega$; en la puerta $\overline{u} \geq u_{\mathrm{puerta}}$; en la
-  cristalera $\partial_n \overline{u} + \alpha\,\overline{u} \geq
-  \alpha\,u_{\mathrm{ext}}$; y en el cerramiento adiabático
+  $\Omega$; en la puerta abierta $\overline{u} \geq u_{\mathrm{puerta}}$; en la
+  cristalera y en la puerta cerrada
+  $\partial_n \overline{u} + \alpha\,\overline{u} \geq \alpha\,u_{\mathrm{ext}}$
+  (análogamente con $\alpha_d$); y en el cerramiento adiabático
   $\partial_n \overline{u} \geq 0$.
 \end{itemize}
 
-Como las tres condiciones de contorno son \textit{lineales} en $u$, la extensión
-no altera la demostración del principio de comparación
-(Teorema~\ref{teo:comparacion}): ésta sólo recurre al principio del máximo débil
+Como las condiciones de contorno son \textit{lineales} en $u$ (o de Robin), la
+extensión no altera la demostración del principio de comparación
+(Teorema~\ref{teo:comparacion}): esta solo recurre al principio del máximo débil
 para el operador $L(u) = -\Delta u + M u$ (Teorema~\ref{teo:L_max_debil}), que es
 igualmente válido cuando en la frontera se imponen condiciones mixtas de Robin,
-Neumann o Dirichlet. Las dos sucesiones monótonas conservan por tanto el
-encajonamiento \eqref{eq:monotonía} y la convergencia garantizada por el
+Neumann o Dirichlet (en el caso de Robin, el máximo de $w^{+}$ en un punto
+frontera contradice la condición homogénea por el lema del punto extremo de
+Hopf; véase \cite{GilbargTrudinger}). Las dos sucesiones monótonas conservan por
+tanto el encajonamiento \eqref{eq:monotonía} y la convergencia garantizada por el
 Teorema~\ref{teo:existencia}.
 
 \subsection{Parámetros modificables del modelo}
 
-La aplicación interactiva expone cuatro parámetros que alteran la física del
+La aplicación interactiva expone cinco parámetros que alteran la física del
 problema. La Tabla~\ref{tab:piscina_parametros} precisa el significado exacto de
 cada uno, el símbolo con el que aparece en las ecuaciones
 \eqref{eq:piscina_modelo} y \eqref{eq:piscina_cc}, y el rango dentro del cual el
@@ -168,9 +197,9 @@ método de sub y super-soluciones está bien definido.
   \caption{Parámetros modificables del modelo de la piscina y su rango de
   validez.}\label{tab:piscina_parametros}
   \small
-  \begin{tabular}{@{}llllp{4.0cm}@{}}
+  \begin{tabular}{@{}llllp{3.6cm}@{}}
     \toprule
-    \textbf{Parámetro} & \textbf{Símbolo} & \textbf{Rango} & \textbf{Defecto} & \textbf{Significado} \\
+    \textbf{Parámetro} & \textbf{Símbolo} & \textbf{Rango} & \textbf{P. defecto} & \textbf{Significado} \\
     \midrule
     Reacción (evaporación) & $\lambda$ & $\lambda \geq 0$ & $5$ & intensidad de la no
     linealidad logística $\lambda\,u(1-u)$ \\
@@ -178,28 +207,36 @@ método de sub y super-soluciones está bien definido.
     persona ($\kappa_i(x) = \kappa$ en su celda) \\
     Convección (cristalera) & $\alpha$ & $\alpha \geq 0$ & $31.5$ & coeficiente de Robin en
     \eqref{eq:piscina_cc}; acoplamiento adimensional $\gamma = \alpha h$ \\
+    Convección (puerta de cristal) & $\alpha_d$ & $\alpha_d \geq 0$ & $40$ & coeficiente de
+    Robin del hueco de puerta cuando la puerta está cerrada \\
     Temperatura exterior & $T_{\mathrm{ext}}$ & $T_{\min} \leq T_{\mathrm{ext}}
-    \leq T_{p}$ & $18\,^{\circ}\mathrm{C}$ & aire exterior tras la cristalera
-    ($u_{\mathrm{ext}} \in [0,1]$) \\
+    \leq T_{p}$ & $18\,^{\circ}\mathrm{C}$ & aire exterior tras la cristalera y la
+    puerta ($u_{\mathrm{ext}} \in [0,1]$) \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-Con los valores por defecto y $h = 1/63$ (malla de $64 \times 64$ nodos), el
-acoplamiento adimensional de la cristalera vale $\gamma = \alpha h \approx 0.5$.
+Con los valores por defecto y $h = 1/63$ (malla de $64 \times 64$ nodos sobre la
+planta cuadrada normalizada), el acoplamiento adimensional de la cristalera vale
+$\gamma = \alpha h \approx 0.5$ y el de la puerta $\gamma_d = \alpha_d h
+\approx 0.63$.
 
 La restricción sobre $T_{\mathrm{ext}}$ no es arbitraria. La normalización
 \eqref{eq:piscina_normalizacion} fija $T_{\min} = 10\,^{\circ}\mathrm{C}$ como la
 temperatura más fría del problema, de modo que toda temperatura normalizada
 pertenece a $[0,1]$. Si se admite $T_{\mathrm{ext}} < T_{\min}$, entonces
 $u_{\mathrm{ext}} < 0$ y el método deja de ser válido por dos motivos: (i) la
-constante $\underline{u} \equiv 0$ deja de ser sub-solución, pues en la cristalera
-se exigiría $0 \leq \alpha\,u_{\mathrm{ext}}$, que falla; y (ii) la fórmula
-discreta de Robin \eqref{eq:piscina_robin_discreta} deja de ser una media convexa
-y puede generar valores $u_b < 0$, rompiendo el encajonamiento en $[0,1]$ en el
-que se apoya la monotonía de la iteración (Teorema~\ref{teo:comparacion}). Por
-esta razón la aplicación restringe $T_{\mathrm{ext}}$ al intervalo
-$[T_{\min}, T_{p}]$.
+constante $\underline{u} \equiv 0$ deja de ser sub-solución, pues en la
+cristalera se exigiría $0 \leq \alpha\,u_{\mathrm{ext}}$, que falla; y (ii) la
+fórmula discreta de Robin \eqref{eq:piscina_robin_discreta} deja de ser una media
+convexa y puede generar valores $u_b < 0$, rompiendo el encajonamiento en $[0,1]$
+en el que se apoya la monotonía de la iteración (Teorema~\ref{teo:comparacion}).
+Por esta razón la aplicación restringe $T_{\mathrm{ext}}$ al intervalo
+$[T_{\min}, T_{p}]$. De modo análogo, cualquier cambio de escenario (aforo,
+parámetros o estado de la puerta) reinicia las dos sucesiones en los extremos
+constantes $\underline{u} \equiv 0$ y $\overline{u} \equiv 1$, que son sub y
+super-solución válidos para \textbf{todo} escenario admisible y garantizan el
+encajonamiento desde la primera iteración.
 
 \subsection{Construcción de sub y super-soluciones}
 
@@ -210,33 +247,33 @@ contorno (Definición~\ref{def:subsuper}, extendida a condiciones mixtas):
 
 \begin{itemize}
   \item \textbf{Sub-solución:} $\underline{u} \equiv 0$, el escenario térmico más
-  frío posible (piscina vacía, puertas abiertas permanentemente). En el interior,
+  frío posible (piscina vacía, puerta abierta). En el interior,
   \begin{equation*}
     -\Delta \underline{u} = 0 \leq f(x, 0) = \lambda \cdot 0 \cdot 1
-    + \sum_{i} \kappa_i(x)\, u_{p,i} \geq 0,
+    + \sum_{i} \kappa_i(x)\, u_{p,i},
   \end{equation*}
   con igualdad cuando la sala está vacía ($N_{\mathrm{pers}} = 0$). En la
-  frontera: en la puerta $\underline{u} = 0 = u_{\mathrm{puerta}}$; en la
-  cristalera $0 \leq u_{\mathrm{ext}}$; y en el cerramiento adiabático
-  $\partial_n \underline{u} = 0$.
+  frontera: en la puerta abierta $\underline{u} = 0 = u_{\mathrm{puerta}}$; en la
+  cristalera y en la puerta cerrada $0 \leq u_{\mathrm{ext}}$; y en el
+  cerramiento adiabático $\partial_n \underline{u} = 0$.
 
   \item \textbf{Super-solución:} $\overline{u} \equiv 1$, el límite térmico
   superior (aforo completo, cerramiento total). En el interior,
   \begin{equation*}
     -\Delta \overline{u} = 0 \geq f(x, 1) = \lambda \cdot 1 \cdot 0
-    + \sum_{i} \kappa_i(x)\,(u_{p,i} - 1) \leq 0,
+    + \sum_{i} \kappa_i(x)\,(u_{p,i} - 1),
   \end{equation*}
-  pues $u_{p,i} \leq 1$. En la frontera: en la puerta
-  $\overline{u} = 1 \geq u_{\mathrm{puerta}} = 0$; en la cristalera
-  $1 \geq u_{\mathrm{ext}}$; y en el cerramiento adiabático
+  pues $u_{p,i} \leq 1$. En la frontera: en la puerta abierta
+  $\overline{u} = 1 \geq u_{\mathrm{puerta}} = 0$; en la cristalera y en la
+  puerta cerrada $1 \geq u_{\mathrm{ext}}$; y en el cerramiento adiabático
   $\partial_n \overline{u} = 0$.
 \end{itemize}
 
 Ambas constantes son $C^{2}$ y están ordenadas, $\underline{u} \leq
 \overline{u}$, por lo que constituyen un par válido de sub y super-solución.
 Obsérvese que la super-solución $\overline{u} \equiv 1$ no iguala el dato de
-Dirichlet en la puerta ($u_{\mathrm{puerta}} = 0$): basta con que lo acote por
-arriba, tal y como exige la Definición~\ref{def:subsuper}.
+Dirichlet en la puerta abierta ($u_{\mathrm{puerta}} = 0$): basta con que lo
+acote por arriba, tal y como exige la Definición~\ref{def:subsuper}.
 
 \subsection{Parámetro de estabilización $M$}
 
@@ -263,46 +300,108 @@ por lo que con $\lambda = 5$ y $\kappa = 2$ resulta $M = 7$. A diferencia del
 modelo de Frank-Kamenetskii, $M$ queda ajustado a la constante de Lipschitz
 efectiva, lo que favorece una convergencia rápida.
 
-\subsection{Discretización y estructura de $M$-matriz}
+\subsection{Discretización, relajación Gauss-Seidel y estructura de $M$-matriz}
 
 El laplaciano se discretiza mediante la plantilla de cinco puntos sobre una malla
 uniforme de $N_x \times N_y$ puntos (en la aplicación interactiva se emplea
-$64 \times 64 = 4096$ incógnitas), siguiendo el esquema del
-Apéndice~\ref{ape:codigo}. La iteración monótona discreta es
+$64 \times 64 = 4\,096$ nodos), siguiendo el esquema del
+Apéndice~\ref{ape:codigo}. La iteración monótona discreta teórica es
 \begin{equation}\label{eq:piscina_iteracion}
   (A_h + M I)\,\mathbf{u}^{(k+1)}
   = \mathbf{f}\bigl(\mathbf{u}^{(k)}\bigr) + M\,\mathbf{u}^{(k)},
 \end{equation}
-que coincide formalmente con \eqref{eq:iteracion_discreta}. La novedad reside en
-el tratamiento de las condiciones de contorno mixtas:
+que coincide formalmente con \eqref{eq:iteracion_discreta}. En la implementación
+en Python (Apéndice~\ref{ape:codigo}) cada paso resuelve este sistema lineal de
+forma exacta mediante factorización sparse de Cholesky, con la matriz fija
+$A_h + M I$. La aplicación 3D interactiva, que debe recalcular el campo en
+tiempo real ante cada interacción del usuario, sustituye la resolución exacta
+del sistema lineal por un \textbf{barrido de relajación Gauss-Seidel} de la
+ecuación no lineal discreta, ejecutado sobre ambas sucesiones a la vez (la
+inferior arrancando en $\underline{u} \equiv 0$ y la superior en
+$\overline{u} \equiv 1$). Importa justificar que esta sustitución no rompe la
+monotonía del método:
 
 \begin{itemize}
-  \item \textbf{Dirichlet (puerta):} el valor $u_{\mathrm{puerta}} = 0$ se fija
-  en los nodos de $\partial\Omega_{\mathrm{puerta}}$ cuando la puerta está
-  abierta; cuando está cerrada, ese tramo pasa a ser adiabático.
+  \item Sea $T$ el operador que aplica un barrido Gauss-Seidel completo (en el
+  orden natural lexicográfico) al sistema $\Phi(\mathbf{u}) =
+  (A_h + M I)\mathbf{u} - \mathbf{f}(\mathbf{u}) - M \mathbf{u} = 0$, con las
+  filas de contorno descritas abajo.
+  \item \textbf{$T$ es orden-preservante:} si $\mathbf{u} \leq \mathbf{v}$
+  componente a componente, entonces $T(\mathbf{u}) \leq T(\mathbf{v})$. En
+  efecto, la actualización de cada nodo es
+  \begin{equation}\label{eq:piscina_gs}
+    u_{\mathrm{new}} = \frac{\frac{1}{h^{2}}
+      \bigl(u_{i-1,j} + u_{i+1,j} + u_{i,j-1} + u_{i,j+1}\bigr)
+      + F(x, u_{\mathrm{old}})}{4/h^{2} + M},
+  \end{equation}
+  con $F(x,u) = f(x,u) + M u$ \textbf{no decreciente} en $u$ (elección de $M$,
+  Proposición~\ref{prop:eleccionM}), y es creciente respecto de los valores
+  vecinos ya actualizados en el mismo barrido. La conclusión se propaga nodo a
+  nodo a lo largo del recorrido lexicográfico (inducción sobre el orden del
+  barrido). Es aquí donde interviene la propiedad de $M$-matriz de $A_h + MI$:
+  los coeficientes fuera de la diagonal son negativos, de modo que los vecinos
+  entran con signo positivo en \eqref{eq:piscina_gs}, y las filas de contorno
+  (medias convexas en el caso de Robin, copias exactas en el de Neumann,
+  constantes en el de Dirichlet) preservan también el orden.
+  \item \textbf{Los extremos son puntos fijos ordenados por $T$:} el vector
+  nulo cumple $T(\mathbf{0}) \geq \mathbf{0}$ (pues $F(x,0) = f(x,0) \geq 0$, al ser
+  $f(x,0) = \sum_i \kappa_i(x)\,u_{p,i} \geq 0$) y el vector unidad cumple $T(\mathbf{1}) \leq
+  \mathbf{1}$ (pues $F(x,1) = f(x,1) + M \leq M$, al ser
+  $f(x,1) = \sum_i \kappa_i(x)(u_{p,i} - 1) \leq 0$, y las filas de contorno
+  (Robin y Neumann) son medias convexas o copias de valores en $[0,1]$).
+  \item De las dos propiedades anteriores sigue, por inducción, la cadena de
+  orden $\mathbf{0} \leq T(\mathbf{0}) \leq \cdots \leq T^{k}(\mathbf{1}) \leq
+  \cdots \leq \mathbf{1}$: las dos sucesiones de barridos son monótonas
+  (creciente la inferior, decreciente la superior) y mutuamente encajonadas,
+  y convergen a puntos fijos de $T$, que son precisamente soluciones del
+  sistema discreto \eqref{eq:piscina_iteracion}. Este es el análogo discreto
+  del argumento del Teorema~\ref{teo:comparacion}, con el barrido
+  Gauss-Seidel haciendo el papel del problema lineal de Dirichlet exacto.
+\end{itemize}
 
-  \item \textbf{Robin (cristalera):} discretizando la derivada normal con una
-  diferencia finita descentrada de paso $h$, la condición
+Para las matrices del tipo de esta discretización, la relajación
+Gauss-Seidel converge, además, al menos tan rápido como la iteración de Jacobi
+del mismo sistema (para matrices consistentemente ordenadas se cumple la
+relación clásica $\rho_{\mathrm{GS}} = \rho_{\mathrm{J}}^{2}$); el barrido
+único por iteración no es, por tanto, una merma frente al esquema teórico sino
+su contrapartida natural en un entorno sin factorización exacta. La diferencia entre ambas implementaciones
+(Python exacta, JavaScript relajada) es puramente computacional: los dos
+esquemas comparten solución y comparten las garantías de monotonía y
+encajonamiento que se acaban de describir.
+
+El resto de la discretización es común a las dos implementaciones. La novedad
+respecto al Capítulo~\ref{cap:subsupersoluciones} reside en el tratamiento de
+las condiciones de contorno mixtas:
+
+\begin{itemize}
+  \item \textbf{Dirichlet (puerta abierta):} el valor $u_{\mathrm{puerta}} = 0$
+  se fija en los nodos de $\partial\Omega_{\mathrm{puerta}}$; con la puerta
+  cerrada ese tramo se comporta como la cristalera (Robin con $\alpha_d$), no
+  como un muro adiabático.
+
+  \item \textbf{Robin (cristalera y puerta cerrada):} discretizando la derivada
+  normal con una diferencia finita descentrada de paso $h$, la condición
   \eqref{eq:piscina_cc} sobre un nodo frontera $u_b$ con vecino interior
   $u_{\mathrm{int}}$ se reduce a
   \begin{equation}\label{eq:piscina_robin_discreta}
     u_b = \frac{u_{\mathrm{int}} + \gamma\, u_{\mathrm{ext}}}{1 + \gamma},
-    \qquad \gamma = \alpha\, h,
+    \qquad \gamma = \alpha\, h
   \end{equation}
-  donde $\gamma$ es el acoplamiento convectivo adimensional. Nótese que la
-  fórmula es una media convexa de $u_{\mathrm{int}}$ y $u_{\mathrm{ext}}$, lo que
-  respeta el principio del máximo.
+  (y análogamente $\gamma_d = \alpha_d h$ en el hueco de puerta), donde $\gamma$
+  es el acoplamiento convectivo adimensional. Nótese que la fórmula es una media
+  convexa de $u_{\mathrm{int}}$ y $u_{\mathrm{ext}}$, lo que respeta el principio
+  del máximo.
 
   \item \textbf{Neumann (cerramiento):} se impone $u_b = u_{\mathrm{int}}$ en
   los nodos adiabáticos (espejo del vecino interior).
 \end{itemize}
 
-Con independencia de la condición aplicada, la matriz del sistema $A_h + M I$
-sigue siendo una \textbf{$M$-matriz} no singular. Las filas interiores son
-diagonalmente dominantes estrictas (diagonal $4/h^{2} + M$ positiva y
-extradiagonales $-1/h^{2}$ no positivas); las filas de Robin tienen diagonal
-$1 + \gamma$ y única extradiagonal $-1$, también dominantes estrictas para
-$\gamma > 0$; y las filas de Neumann ($u_b = u_{\mathrm{int}}$) son sólo
+Con independencia de la condición aplicada, la matriz del sistema del paso
+lineal $A_h + M I$ sigue siendo una \textbf{$M$-matriz} no singular. Las filas
+interiores son diagonalmente dominantes estrictas (diagonal $4/h^{2} + M$
+positiva y extradiagonales $-1/h^{2}$ no positivas); las filas de Robin tienen
+diagonal $1 + \gamma$ y única extradiagonal $-1$, también dominantes estrictas
+para $\gamma > 0$; y las filas de Neumann ($u_b = u_{\mathrm{int}}$) son solo
 dominantes en sentido débil. No obstante, al ser el dominio conexo la matriz es
 \textit{irreduciblemente} diagonalmente dominante, condición suficiente para que
 sea una $M$-matriz no singular. En consecuencia $(A_h + M I)^{-1} \geq 0$ y el
@@ -322,12 +421,16 @@ $\underline{u} \leq u_1 \leq \cdots \leq u^{*} \leq \cdots \leq \overline{u}_1
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.85\textwidth]{piscina_sub_super.png}
+  \includegraphics[width=0.9\textwidth]{piscina_sub_super.png}
   \caption{Convergencia del método de sub y super-soluciones para el modelo de
-  climatización de la piscina. \textbf{Arriba:} sub-solución inicial ($u \equiv
-  0$, escenario más frío) y super-solución inicial ($u \equiv 1$, aforo
-  completo). \textbf{Abajo:} solución de equilibrio con las fuentes corporales
-  (personas) y el frente frío de la puerta abierta.}
+  climatización de la piscina. \textbf{Arriba:} sub-solución $u_1$ (primera
+  iterada partiendo de $u \equiv 0$) y super-solución $\bar{u}_1$ (primera
+  iterada partiendo de $\bar{u} \equiv 1$); ya se insinúan la banda templada de
+  la cristalera (Robin) y el frente frío de la puerta (Dirichlet). \textbf{
+  Abajo:} solución de equilibrio $u^{*}$ con las fuentes corporales (personas
+  marcadas con círculos) y su contorno frío en la puerta, y encajonamiento
+  $\bar{u}^{(k)} - u^{(k)}$ fotografiado en la iteración 200, cuando el
+  certificado bilateral aún es ancho lejos de la puerta.}
   \label{fig:piscina_sub_super}
 \end{figure}
 
@@ -352,21 +455,25 @@ como certificado de precisión.
   \centering
   \includegraphics[width=0.85\textwidth]{piscina_convergencia.png}
   \caption{Decaimiento del error en escala logarítmica para el modelo de la
-  piscina. El \textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$
-  entre ambas sucesiones decrece de forma aproximadamente lineal en escala
-  semilogarítmica, evidenciando la convergencia monótona hacia la solución de
-  equilibrio.}
+  piscina (réplica del esquema de la aplicación: diferencias finitas con
+  relajación Gauss-Seidel, malla $64 \times 64$, $\lambda = 5$, $\kappa = 2$,
+  $M = 7$). El \textit{gap} $\|\overline{u}^{(k)} - \underline{u}^{(k)}\|_{\infty}$
+  entre ambas sucesiones decrece de forma lineal en escala semilogarítmica
+  (recta: convergencia lineal asintótica), alcanzando $10^{-8}$ tras unas
+  $37\,600$ barridos: cada uno cuesta $O(4096)$ operaciones, lo que permite a
+  la aplicación mantener la animación en tiempo real.}
   \label{fig:piscina_convergencia}
 \end{figure}
 
 A diferencia de los ejemplos 1D, este modelo cuenta con una \textbf{aplicación
-3D interactiva} (desarrollada con TypeScript y Three.js) que permite añadir o
-retirar personas en tiempo real y observar cómo ambas sucesiones se reajustan
-hacia el nuevo equilibrio, así como alternar la visualización entre la
-sub-solución, la super-solución, el \textit{gap} $\overline{u} - \underline{u}$
-y la solución de equilibrio. La Figura~\ref{fig:piscina_app} muestra una captura
-de dicha aplicación, que complementa la validación numérica con una
-visualización orientada a la defensa del trabajo.
+3D interactiva} (desarrollada con TypeScript y Three.js, desplegada en una
+Raspberry Pi~5) que permite añadir o retirar personas en tiempo real y observar
+cómo ambas sucesiones se reajustan hacia el nuevo equilibrio, así como alternar
+la visualización entre la sub-solución, la super-solución, el \textit{gap}
+$\overline{u} - \underline{u}$ y la solución de equilibrio. La
+Figura~\ref{fig:piscina_app} muestra una captura de dicha aplicación, que
+complementa la validación numérica con una visualización orientada a la defensa
+del trabajo.
 
 \begin{figure}[htbp]
   \centering
@@ -399,7 +506,7 @@ visualización orientada a la defensa del trabajo.
 %   $L$ (Lipschitz)                     & $\lambda e^{u_{\max}}$ & $\lambda$     & $\lambda e^{u_{\max}}$ & $\lambda + \kappa N_{\mathrm{local}}$ \\
 %   $M$ empleado                        & $\lambda e^{2.5} \approx 24.36$ & $6$ & $\lambda e^{2.5} \approx 12.18$ & $7$ \\
 %   $\lambda$                           & $2$               & $5$                & $1$             & $5$ \\
-%   Cond. Contorno                      & $u=0$ extremos    & $0.9,\,0.1$ extremos & $u=0$ en $\partial\Omega$ & Robin + Dirichlet + Neumann \\
+%   Cond. Contorno                      & $u=0$ extremos    & $0.9,\,0.1$ extremos & $u=0$ en $\partial\Omega$ & Robin + Dirichlet/Robin (puerta) + Neumann \\
 %   Iteraciones (sub)                   & $48$              & $12$               & $14$            & (medido en la app) \\
 %   Iteraciones (super)                 & $53$              & $12$               & $17$            & (medido en la app) \\
 %   Unicidad                           & No trivial\textsuperscript{1} & Sugerida & No trivial & Sugerida \\

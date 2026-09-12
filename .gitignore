@@ -1,0 +1,9 @@
+node_modules/
+dist/
+
+# Documento de la memoria (copia local, no versionar)
+tfg.pdf
+
+*.log
+.DS_Store
+.vite/

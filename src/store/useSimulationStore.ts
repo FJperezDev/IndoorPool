@@ -135,6 +135,7 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   },
 
   updatePositions: () => {
+    const doorBefore = get().isDoorOpen;
     set((state) => {
       const nextPersons: Person[] = [];
       let sensorOpen = false;
@@ -144,7 +145,8 @@ export const useSimulationStore = create<SimState>((set, get) => ({
         const dz = p.targetZ - p.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
 
-        if (p.x > 8.5 && Math.abs(p.z) < 2) sensorOpen = true; // Sensor de puerta
+        // Sensor de la puerta corredera (hueco en x = +11, z ∈ [-1, 1])
+        if (p.x > 10 && Math.abs(p.z) < 1.5) sensorOpen = true;
 
         if (dist < 0.5) {
           if (p.status === "exiting") return;
@@ -183,6 +185,9 @@ export const useSimulationStore = create<SimState>((set, get) => ({
             : sensorOpen;
       return { persons: nextPersons, isDoorOpen };
     });
+    // Un cambio de estado de la puerta altera las condiciones de contorno:
+    // las sucesiones en curso ya no son sub/super-soluciones del problema.
+    if (get().isDoorOpen !== doorBefore) get().refresh();
   },
 
   setViewMode: (viewMode) => set({ viewMode }),
@@ -212,7 +217,15 @@ export const useSimulationStore = create<SimState>((set, get) => ({
   },
   refresh: () => {
     const { running, persons, isDoorOpen, targetIteration } = get();
-    if (!running) gotoIteration(persons, isDoorOpen, targetIteration);
+    if (!running) {
+      gotoIteration(persons, isDoorOpen, targetIteration);
+    } else {
+      // Con escenario nuevo (parámetros, aforo o puerta) las sucesiones en
+      // curso pueden no ser sub/super-soluciones del problema modificado:
+      // se reinician en u = 0 y u~ = 1 para preservar el encajonamiento.
+      resetSolver();
+      set({ targetIteration: 0 });
+    }
   },
   resetSimulation: () => {
     resetSolver();

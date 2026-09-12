@@ -11,6 +11,9 @@ import { Scene } from "./components/Scene";
 import { ConvergencePanel } from "./components/ConvergencePanel";
 
 export default function App() {
+  // Modo demo (p. ej. pool.franjpg.com/?demo): puerta abierta, personas
+  // entrando y panel Leva oculto para capturas limpias.
+  const isDemo = window.location.search.includes("demo");
   const {
     addPerson,
     removePerson,
@@ -37,7 +40,7 @@ export default function App() {
   useControls("Simulación", {
     "Entrar (1 persona)": button(() => addPerson()),
     "Salir (1 persona)": button(() => removePerson()),
-    "Aforo completo (50)": button(() => fillCapacity()),
+    [`Aforo completo (${maxCapacity})`]: button(() => fillCapacity()),
     Vaciar: button(() => clearPersons()),
     Reiniciar: button(() => resetSimulation()),
     Aforo: { value: `${persons.length} / ${maxCapacity}`, editable: false },
@@ -94,6 +97,16 @@ export default function App() {
         refresh();
       },
     },
+    "α puerta (cristal)": {
+      value: params.alphaDoor,
+      min: 0,
+      max: 120,
+      step: 1,
+      onChange: (v) => {
+        setParams({ alphaDoor: v });
+        refresh();
+      },
+    },
     "T exterior (°C)": {
       value: params.T_ext,
       min: 10,
@@ -143,6 +156,15 @@ export default function App() {
   });
 
   useEffect(() => {
+    if (isDemo) {
+      setTimeout(() => setDoorMode("open"), 100);
+      setTimeout(() => addPerson(), 300);
+      setTimeout(() => addPerson(), 1200);
+      setTimeout(() => addPerson(), 2100);
+    }
+  }, [addPerson, setDoorMode, isDemo]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       if (running) updatePositions();
     }, 100);
@@ -151,7 +173,7 @@ export default function App() {
 
   return (
     <div style={{ width: "100vw", height: "100vh", background: "#101216" }}>
-      <Leva theme={{ sizes: { rootWidth: "360px" } }} />
+      {!isDemo && <Leva theme={{ sizes: { rootWidth: "360px" } }} />}
 
       <header
         style={{

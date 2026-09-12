@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { useSimulationStore } from "../store/useSimulationStore";
 import {
   GRID_SIZE,
+  HALF_ROOM,
   solverState,
   stepSimulation,
   TURBO_LUT,
@@ -48,28 +49,38 @@ export const HeatMap = () => {
 
     const data = imgData.current.data;
     const { sub, super: sup } = solverState;
-    const size = GRID_SIZE * GRID_SIZE;
+    const N = GRID_SIZE;
 
+    // Mapeo malla -> imagen: el solver indexa idx = i*N + j con i ↔ X mundo y
+    // j ↔ Z mundo; un ImageData indexa py*N + px con px ↔ X e py ↔ Z (v=1 en
+    // la fila superior del canvas, que tras rotation -PI/2 corresponde a
+    // Z minimo = cristalera). Por tanto: o = (j*N + i) * 4, valor = grid[i*N+j].
     if (viewMode === "gap") {
-      for (let k = 0; k < size; k++) {
-        const g = sup[k] > sub[k] ? sup[k] - sub[k] : 0;
-        const o = k * 4;
-        data[o] = 255;
-        data[o + 1] = Math.round(60 * (1 - g));
-        data[o + 2] = Math.round(60 * (1 - g));
-        data[o + 3] = Math.min(255, Math.round(g * GAP_ALPHA_SCALE));
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < N; j++) {
+          const k = i * N + j;
+          const g = sup[k] > sub[k] ? sup[k] - sub[k] : 0;
+          const o = (j * N + i) * 4;
+          data[o] = 255;
+          data[o + 1] = Math.round(60 * (1 - g));
+          data[o + 2] = Math.round(60 * (1 - g));
+          data[o + 3] = Math.min(255, Math.round(g * GAP_ALPHA_SCALE));
+        }
       }
     } else {
       const field =
         viewMode === "sub" ? sub : viewMode === "super" ? sup : null;
-      for (let k = 0; k < size; k++) {
-        const v = field ? field[k] : (sub[k] + sup[k]) / 2;
-        const c = Math.max(0, Math.min(255, (v * 255) | 0));
-        const o = k * 4;
-        data[o] = TURBO_LUT[c * 3];
-        data[o + 1] = TURBO_LUT[c * 3 + 1];
-        data[o + 2] = TURBO_LUT[c * 3 + 2];
-        data[o + 3] = ALPHA_VIEW;
+      for (let i = 0; i < N; i++) {
+        for (let j = 0; j < N; j++) {
+          const k = i * N + j;
+          const v = field ? field[k] : (sub[k] + sup[k]) / 2;
+          const c = Math.max(0, Math.min(255, (v * 255) | 0));
+          const o = (j * N + i) * 4;
+          data[o] = TURBO_LUT[c * 3];
+          data[o + 1] = TURBO_LUT[c * 3 + 1];
+          data[o + 2] = TURBO_LUT[c * 3 + 2];
+          data[o + 3] = ALPHA_VIEW;
+        }
       }
     }
 
@@ -83,7 +94,7 @@ export const HeatMap = () => {
       position={[0, 0.045, 0]}
       renderOrder={10}
     >
-      <planeGeometry args={[20, 20]} />
+      <planeGeometry args={[2 * HALF_ROOM, 2 * HALF_ROOM]} />
       <meshBasicMaterial map={texture} transparent depthWrite={false} />
     </mesh>
   );

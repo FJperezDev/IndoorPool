@@ -1,4 +1,4 @@
-import { OrbitControls, Environment } from "@react-three/drei";
+import { OrbitControls, Environment, Lightformer } from "@react-three/drei";
 import { HeatMap } from "./HeatMap";
 import { Persons } from "./Persons";
 import { Pool } from "./Pool";
@@ -48,8 +48,39 @@ export const Scene = () => {
         target={[0, 1, 0]}
       />
 
-      {/* Entorno HDRI para reflejos en cristal y agua */}
-      <Environment preset="apartment" />
+      {/* Entorno HDRI PROCEDURAL (render local, sin descargas de red):
+          provee reflejos en cristal y agua sin depender de internet, a
+          prueba de la desconexión del aula durante la defensa */}
+      <Environment resolution={128} frames={1}>
+        <color attach="background" args={["#141a24"]} />
+        {/* banda luminosa tras la cristalera */}
+        <Lightformer
+          form="rect"
+          intensity={2.4}
+          color="#cfe8ff"
+          position={[0, 3, -12]}
+          scale={[20, 5, 1]}
+          target={[0, 0, 0]}
+        />
+        {/* techo luminoso */}
+        <Lightformer
+          form="rect"
+          intensity={1.2}
+          color="#ffffff"
+          position={[0, 6.4, 0]}
+          rotation-x={Math.PI / 2}
+          scale={[18, 18, 1]}
+        />
+        {/* suelo oscuro */}
+        <Lightformer
+          form="rect"
+          intensity={0.4}
+          color="#31404d"
+          position={[0, -0.5, 0]}
+          rotation-x={-Math.PI / 2}
+          scale={[18, 18, 1]}
+        />
+      </Environment>
     </>
   );
 };
